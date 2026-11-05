@@ -91,8 +91,8 @@
   }
 
   // ---- Pembagian bagian CV ----
-  const HDR_OTHER = /^(keahlian|kemampuan|kompetensi|skills?|technical skills|hard skills?|soft skills?|sertifikat|sertifikasi|certifications?|certificates?|pelatihan|training|kursus|courses?|organisasi|pengalaman organisasi|organi[sz]ational experience|organi[sz]ations?|proyek|projects?|bahasa|languages?|referensi|references?|ringkasan|profil|profil singkat|profile|summary|tentang saya|about me|prestasi|penghargaan|awards?|achievements?|data pribadi|data diri|personal data|personal information|personal details|kontak|contact|publikasi|publications?|hobi|interests?|volunteer|kegiatan)$/;
-  const HDR_EXP = /^(pengalaman|pengalaman kerja|pengalaman profesional|pengalaman bekerja|riwayat pekerjaan|riwayat kerja|work experience|working experience|professional experience|employment|employment history|experience|career history)$/;
+  const HDR_OTHER = /^(professional summary|career summary|pengalaman magang|magang|internship|internships|internship experience|keahlian|kemampuan|kompetensi|skills?|technical skills|hard skills?|soft skills?|sertifikat|sertifikasi|certifications?|certificates?|pelatihan|training|kursus|courses?|organisasi|pengalaman organisasi|organi[sz]ational experience|organi[sz]ations?|proyek|projects?|bahasa|languages?|referensi|references?|ringkasan|profil|profil singkat|profile|summary|tentang saya|about me|prestasi|penghargaan|awards?|achievements?|data pribadi|data diri|personal data|personal information|personal details|kontak|contact|publikasi|publications?|hobi|interests?|volunteer|kegiatan)$/;
+  const HDR_EXP = /^(pengalaman|pengalaman kerja|pengalaman profesional|pengalaman bekerja|riwayat pekerjaan|riwayat kerja|riwayat pengalaman|pengalaman proyek|work experience|work experiences|working experience|working experiences|professional experience|professional experiences|project experience|project experiences|employment|employment history|employment record|experience|experiences|career history)$/;
   const HDR_EDU = /^(pendidikan|pendidikan formal|pendidikan terakhir|riwayat pendidikan|latar belakang pendidikan|education|education background|educational background|education history|academic background)$/;
 
   function headerType(line) {
@@ -123,7 +123,7 @@
 
   // ---- Lama pengalaman ----
   const MON = 'januari|january|jan|februari|february|feb|maret|march|mar|april|apr|mei|may|juni|june|jun|juli|july|jul|agustus|august|agu|agt|ags|aug|september|sept|sep|oktober|october|okt|oct|nopember|november|nov|desember|december|des|dec';
-  const DATE = `(?:(?:(?:\\d{1,2}\\s+)?(${MON})\\.?,?\\s*)?(\\d{4})|(\\d{1,2})[/.\\-](\\d{4}))`;
+  const DATE = `(?:(?:(?:\\d{1,2}\\s+)?(${MON})\\.?,?\\s*(?:\\d{1,2},\\s*)?)?(\\d{4})|(\\d{1,2})[/.\\-](\\d{4}))`;
   const NOW_WORDS = 'sekarang|saat ini|kini|present|current|now|today|ongoing|masih bekerja';
   const SEP = '\\s*(?:-|to|s\\.?\\s?d\\.?|s/d|sampai(?:\\s+dengan)?|hingga|until)\\s*';
   const RANGE = new RegExp(`(?<![\\p{L}\\p{N}/.\\-])${DATE}${SEP}(?:${DATE}|(${NOW_WORDS}))(?![\\p{L}\\p{N}])`, 'giu');
@@ -199,7 +199,9 @@
     const source = sec.hasExp
       ? sec.exp
       : (sec.rest + '\n' + sec.exp).split('\n').filter(l => !EDU_LINE.test(l)).join('\n');
-    const months = mergedMonths(parseIntervals(source, now));
+    let months = mergedMonths(parseIntervals(source, now));
+    // Judul pengalaman ada tetapi tanggalnya tertulis di luar bagian itu.
+    if (!months && sec.hasExp) months = mergedMonths(parseIntervals(sec.rest.split('\n').filter(l => !EDU_LINE.test(l)).join('\n'), now));
     const claim = claimedYears(text);
     if (months > 0) {
       return { years: Math.round(months / 12 * 10) / 10, source: 'tanggal', claim };
@@ -227,14 +229,17 @@
     return best;
   }
 
+  // Baris jabatan sering berada di atas CV dan tidak boleh terbaca sebagai nama.
+  const JOB_TITLE = /\b(surveyor|engineer|engineering|drafter|arsitek|architect|manager|manajer|staff|staf|supervisor|officer|konsultan|consultant|teknik|estimator|inspector|inspektur|pelaksana|portfolio|portofolio|profile|profil)\b/i;
+
   function detectName(text, fallback) {
-    const labeled = /^\s*(?:nama(?: lengkap)?|full name|name)\s*:\s*(.{3,60})$/im.exec(text);
-    if (labeled) return labeled[1].trim();
+    const labeled = /^\s*(?:nama(?: lengkap)?|full name|name)\s*:?[ \t]*\n?[ \t]*:?[ \t]*([^\n:@\d]{3,60})$/im.exec(text);
+    if (labeled && !JOB_TITLE.test(labeled[1])) return labeled[1].trim();
     const lines = text.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 8);
     for (const l of lines) {
       if (headerType(l)) break; // nama selalu berada sebelum bagian pertama CV
       if (l.length < 3 || l.length > 60 || /[@\d:<>=]/.test(l)) continue;
-      if (/^(curriculum vitae|daftar riwayat hidup|riwayat hidup|resume|cv)$/i.test(l)) continue;
+      if (/^(curriculum vitae|daftar riwayat hidup|riwayat hidup|resume|cv)$/i.test(l) || JOB_TITLE.test(l)) continue;
       if (/\p{L}/u.test(l)) return l;
     }
     return fallback;
@@ -423,6 +428,6 @@
 
   const RANK = { lolos: 0, pertimbangkan: 1, cek: 2, tidak: 3 };
 
-  const api = { LEVELS, levelOf, idn, normalize, parseList, matchTerm, expandTerm, splitSections, extractFacts, evaluate, defaultCriteria, parseKetentuan, findProtected, RANK };
+  const api = { headerType, LEVELS, levelOf, idn, normalize, parseList, matchTerm, expandTerm, splitSections, extractFacts, evaluate, defaultCriteria, parseKetentuan, findProtected, RANK };
   root.Screening = api;
 })(typeof window !== 'undefined' ? window : globalThis);
