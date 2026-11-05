@@ -192,7 +192,7 @@
       }));
       out.set(`lowongan_hr/${l.id}`, clean({
         criteria: l.criteria, tahapan: l.tahapan, pengumuman: l.pengumuman || {},
-        nomorBerikut: l.nomorBerikut || 0, kode: l.kode || '', terbit: l.terbit || {},
+        nomorBerikut: l.nomorBerikut || 0, kode: l.kode || '', terbit: l.terbit || {}, hapusPada: l.hapusPada || '',
       }));
     });
     db.kandidat.forEach(k => {
@@ -214,5 +214,25 @@
     return [];
   }
 
-  root.Rekrutmen = { contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
+  // Lowongan yang tanggal hapus datanya sudah lewat.
+  const lewatMasaSimpan = (l, hariIni) => !!l.hapusPada && l.hapusPada <= hariIni;
+
+  // Cadangan terenkripsi: AES-GCM dengan kunci dari kata sandi. Kata sandi tidak disimpan di mana pun.
+  const b64 = buf => { let s = ''; new Uint8Array(buf).forEach(x => { s += String.fromCharCode(x); }); return btoa(s); };
+  const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  async function kunci(pw, salt) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  async function enkripsi(text, pw) {
+    const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await kunci(pw, salt), new TextEncoder().encode(text));
+    return JSON.stringify({ format: 'lowongan-terenkripsi-1', salt: b64(salt), iv: b64(iv), data: b64(data) });
+  }
+  async function dekripsi(o, pw) {
+    const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(o.iv) }, await kunci(pw, unb64(o.salt)), unb64(o.data));
+    return new TextDecoder().decode(data);
+  }
+
+  root.Rekrutmen = { lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
 })(typeof window !== 'undefined' ? window : globalThis);

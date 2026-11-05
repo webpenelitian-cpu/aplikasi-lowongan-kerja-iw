@@ -59,7 +59,8 @@
       <div class="field"><label class="consent"><input id="a-setuju" type="checkbox" aria-describedby="a-err"> <span>Saya menyetujui ${esc(l.perusahaan)} memproses data pribadi dan isi CV saya untuk seleksi ${esc(l.judul)}, dan menyimpannya paling lama ${esc(l.retensi)}. Saya dapat meminta data saya diakses, diperbaiki, atau dihapus melalui ${esc(l.kontak)}.</span></label>
         <label class="consent"><input id="a-pool" type="checkbox"> <span>Opsional: simpan data saya untuk ditawari lowongan lain yang sesuai selama masa simpan di atas.</span></label>
         <span class="hint">CV dicocokkan otomatis dengan persyaratan sebagai rekomendasi awal. Keputusan tetap dibuat oleh tim HR, dan Anda dapat mengajukan keberatan melalui kontak di atas.</span>
-        <span class="hint">Butuh penyesuaian seleksi karena disabilitas? Hubungi ${esc(l.kontak)}.</span></div>
+        <span class="hint">Butuh penyesuaian seleksi karena disabilitas? Hubungi ${esc(l.kontak)}.</span>
+        <span class="hint"><a href="#/privasi">Baca pemberitahuan privasi pelamar</a></span></div>
       <p id="a-err" class="warn" role="alert" hidden></p>
       <button type="submit" class="start">Kirim lamaran</button>
     </form>`;
@@ -150,6 +151,19 @@
     });
   }
 
+  function privasi() {
+    setTitle('Pemberitahuan privasi');
+    app.innerHTML = `<section class="panel privasi"><h2>Pemberitahuan privasi pelamar</h2>
+      <p>Pemberitahuan ini menjelaskan cara data lamaran Anda diproses. Pengendali data adalah perusahaan yang tercantum pada lowongan yang Anda lamar.</p>
+      <h3>Data yang dikumpulkan</h3><ul><li>Nama, email, dan nomor telepon yang Anda isi.</li><li>Teks dari CV Anda. File aslinya tidak disimpan.</li><li>Hasil tiap tahap seleksi dan catatan penilaian.</li></ul>
+      <h3>Tujuan dan dasar pemrosesan</h3><p>Data dipakai untuk menilai lamaran dan menghubungi Anda selama seleksi, berdasarkan persetujuan yang Anda berikan saat melamar. Bila Anda memilih talent pool, data juga dipakai untuk menawarkan lowongan lain yang sesuai.</p>
+      <h3>Penilaian otomatis</h3><p>CV dicocokkan otomatis dengan persyaratan jabatan sebagai rekomendasi awal. Rekomendasi itu tidak menjadi keputusan. Tim HR memeriksa dan memutuskan, dan Anda dapat mengajukan keberatan.</p>
+      <h3>Penyimpanan dan penerima data</h3><ul><li>Data disimpan di layanan Google Firebase, wilayah Jakarta, dan hanya bisa dibuka akun HR yang berwenang.</li><li>Google reCAPTCHA memproses data teknis perangkat untuk mencegah penyalahgunaan.</li><li>Masa simpan tercantum pada persetujuan di formulir lowongan. Setelah itu data dihapus.</li></ul>
+      <h3>Pengumuman</h3><p>Portal hanya menampilkan nomor peserta. Nama, kontak, dan skor Anda tidak dipublikasikan di portal.</p>
+      <h3>Hak Anda</h3><p>Anda dapat meminta akses, perbaikan, atau penghapusan data, menarik persetujuan, dan mengajukan keberatan atas penilaian otomatis, melalui kontak HR yang tercantum pada lowongan. Menarik persetujuan dapat menghentikan proses seleksi Anda.</p>
+    </section>`;
+  }
+
   function hasilHtml(h) {
     const line = { lolos: 'Lolos', tidak: 'Tidak lolos' };
     const head = h.status === 'tidak'
@@ -168,6 +182,7 @@
     window.scrollTo(0, 0);
     try {
       if (parts[0] === 'cek') cek();
+      else if (parts[0] === 'privasi') privasi();
       else if (parts[0] === 'l' && parts[1]) await detail(decodeURIComponent(parts[1]));
       else await home();
       app.focus({ preventScroll: true });

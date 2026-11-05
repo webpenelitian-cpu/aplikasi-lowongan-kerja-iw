@@ -349,6 +349,13 @@
     return checks;
   }
 
+  // Kata kunci yang diulang berlebihan menandakan CV sengaja diisi untuk mengelabui pencocokan.
+  function stuffing(text, c) {
+    const items = parseList(c.keahlian.items).concat(parseList(c.nilaiTambah.items));
+    const hit = items.filter(i => expandTerm(i).some(t => (text.match(new RegExp(termRegex(t).source, 'giu')) || []).length >= 12));
+    return hit.length ? `Kata kunci berulang tidak wajar: ${hit.join(', ')}. Periksa CV aslinya.` : '';
+  }
+
   function evaluate(facts, criteria) {
     const c = criteria;
     const checks = buildChecks(facts, c);
@@ -378,7 +385,7 @@
       rekomendasi = 'tidak';
       alasan = [`Skor ${score} jauh di bawah ambang ${ambang}`];
     }
-    return { checks, score, rekomendasi, alasan };
+    return { checks, score, rekomendasi, alasan, peringatan: stuffing(facts.text, c) };
   }
 
   // ---- Membaca teks lowongan menjadi ketentuan ----

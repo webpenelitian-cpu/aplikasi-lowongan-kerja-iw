@@ -200,6 +200,12 @@ details.panel > summary { cursor: pointer; font-weight: 600; }
 .login { max-width: 460px; margin: 24px auto; }
 .login code { overflow-wrap: anywhere; background: var(--surface-2); padding: 2px 5px; border-radius: 4px; }
 
+dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 18px; width: min(420px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(10, 20, 30, .55); }
+dialog > * + * { margin-top: 8px; }
+.privasi { max-width: 760px; margin: 0 auto; }
+.privasi ul { margin: 0; padding-left: 20px; }
+
 @media (max-width: 900px) {
   .two, .portal .two { grid-template-columns: minmax(0, 1fr); }
   .wrap { padding: 16px 16px 24px; }
@@ -218,7 +224,7 @@ details.panel > summary { cursor: pointer; font-weight: 600; }
 }
 @media print {
   body { background: #fff; color: #000; }
-  .noprint { display: none !important; }
+  .noprint, .grecaptcha-badge, dialog { display: none !important; }
   .wrap, .two, .stack { display: block; padding: 0; max-width: none; }
   .announce { border: 0; padding: 0; }
   .announce .pass, .announce .fail, .announce .sub { color: #000; }

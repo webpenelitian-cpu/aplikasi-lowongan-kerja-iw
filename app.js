@@ -112,6 +112,13 @@
     }).sort((a, b) => (a.rank === undefined ? 9 : a.rank) - (b.rank === undefined ? 9 : b.rank) || b.score - a.score || a.k.nomor.localeCompare(b.k.nomor)).map(x => x.k);
   }
 
+  const hariIni = () => new Date().toLocaleDateString('en-CA'); // format YYYY-MM-DD pada zona waktu perangkat
+
+  function cekMasaSimpan() {
+    const n = db.lowongan.filter(l => R.lewatMasaSimpan(l, hariIni())).length;
+    if (n) showBanner(`${n} lowongan sudah melewati tanggal hapus data. Buka lowongannya dan hapus data pelamarnya.`);
+  }
+
   // ---- Beranda ----
   function homeHtml() {
     const cards = db.lowongan.map(l => {
@@ -119,6 +126,7 @@
       const n = s => st.filter(x => x === s).length;
       return `<button type="button" class="job" data-act="open" data-id="${esc(l.id)}">
         <span class="job-head"><strong>${esc(l.judul)}</strong>${l.contoh ? '<span class="badge b-cek">Contoh</span>' : `<span class="badge ${l.status === 'tutup' ? 'b-none' : 'b-lolos'}">${l.status === 'tutup' ? 'Ditutup' : 'Dibuka'}</span>`}</span>
+        ${R.lewatMasaSimpan(l, hariIni()) ? '<span class="badge b-tidak">Masa simpan habis, hapus datanya</span>' : ''}
         <small>${esc([l.perusahaan, l.lokasiKerja].filter(Boolean).join(' · ') || 'Lengkapi info lowongan')}${l.tenggat ? ` · Tenggat ${esc(R.tanggalId(l.tenggat))}` : ''}</small>
         <span class="stats"><span><b>${list.length}</b> pelamar</span><span><b>${n('proses')}</b> dalam proses</span><span><b>${n('lolos')}</b> lolos</span><span><b>${n('gugur')}</b> tidak lolos</span></span>
       </button>`;
@@ -181,6 +189,7 @@
           <button type="button" class="start" data-act="parse">Isi ketentuan dari persyaratan</button><p id="parse-note" class="note" hidden></p></div>
         ${cloudOn ? `<div class="field"><label for="i-kontak">Kontak permintaan data pelamar</label><input id="i-kontak" type="text" value="${esc(l.kontak)}" placeholder="Email HR" data-l="kontak">
           <label for="i-retensi">Masa simpan data pelamar</label><input id="i-retensi" type="text" value="${esc(l.retensi)}" placeholder="6 bulan setelah seleksi selesai" data-l="retensi">
+          <label for="i-hapus">Tanggal hapus data</label><input id="i-hapus" type="date" value="${esc(l.hapusPada)}" data-l="hapusPada">
           <span class="hint">Perusahaan, kontak, dan masa simpan wajib diisi. Tanpa itu pelamar belum bisa melamar.</span></div>` : ''}
         <button type="button" class="ghost danger start" data-act="del-job">Hapus lowongan dan data pelamarnya</button>
       </section>
@@ -257,6 +266,7 @@
         ${rec ? `<span class="badge b-${rec}">${REC[rec]}</span>` : '<span class="badge b-none">Belum dinilai</span>'}
       </summary>
       <div class="detail">
+        ${r && r.peringatan ? `<p class="warn">${esc(r.peringatan)}</p>` : ''}
         ${alasan.length ? `<div class="reason"><strong>Alasan</strong><ul>${alasan.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>` : ''}
         ${factsHtml(f)}
         ${r && r.checks.length ? `<ul class="checks">${r.checks.map(checkHtml).join('')}</ul>` : ''}
@@ -323,6 +333,7 @@
       ['Ketentuan screening terisi', adaKriteria],
       ['Tidak ada syarat ciri pribadi', !S.findProtected(l.persyaratan)],
       ['Tiap tahap punya keterangan untuk pelamar', l.tahapan.length > 0 && l.tahapan.every(t => t.keterangan)],
+      ['Tanggal hapus data ditetapkan', !!l.hapusPada],
     ];
   }
 
@@ -560,7 +571,7 @@
     else if (d.root) l.criteria[d.root] = val;
     else if (d.c) l.criteria[d.c][d.p] = val;
     else if (d.x !== undefined) l.criteria.tambahan[+d.x][d.p] = val;
-    else if (d.stage) { const t = l.tahapan.find(x => x.id === d.stage); if (t) { t[d.f] = val; if (e.type === 'change' && d.f === 'nama') $('matrix').innerHTML = matrixHtml(l); } }
+    else if (d.stage) { const t = l.tahapan.find(x => x.id === d.stage); if (t) { t[d.f] = val; if (e.type === 'change' && d.f === 'nama') { $('matrix').innerHTML = matrixHtml(l); perbaruiTerbit(l); } } }
     else if (d.note) { const k = db.kandidat.find(x => x.id === d.note); if (k) k.catatan = val; }
     else if (d.a) { pengumumanState(l)[d.a] = val; renderAnnounce(l); }
     else if (d.pTahap !== undefined) { view.tahapId = val; render(); return; }
@@ -597,6 +608,7 @@
       if (!k || !window.confirm(`Hapus data ${namaOf(k)}?`)) return;
       db.kandidat = db.kandidat.filter(x => x !== k);
       factsCache.delete(k.id); openIds.delete(k.id);
+      perbaruiTerbit(l, k.nomor);
       save(); renderList(l);
       $('head-count').textContent = `${pelamar(l.id).length} pelamar`;
     },
@@ -629,8 +641,9 @@
       const sisa = g.belum.length ? ` ${g.belum.length} peserta yang belum diputuskan tidak ikut diumumkan.` : '';
       if (!window.confirm(`Terbitkan hasil ${tahap.nama}: ${g.lolos.length} lolos dan ${g.tidak.length} tidak lolos? Pelamar akan langsung bisa melihatnya.${sisa}`)) return;
       try {
-        await C.apply(R.publishPayload(l, pelamar(l.id), i, o), []);
-        l.terbit = { ...(l.terbit || {}), [tahap.id]: true };
+        const sets = R.publishPayload(l, pelamar(l.id), i, o);
+        await C.apply(sets, []);
+        l.terbit = { ...(l.terbit || {}), [tahap.id]: { lolos: sets[0][1].lolos, tidak: sets[0][1].tidak } };
         await flush();
         render();
         const n = $('copy-note');
@@ -658,12 +671,48 @@
       const tahap = l.tahapan.find(t => t.id === view.tahapId);
       copyText(R.personalMessage(k, l, tahap, el.dataset.s, o, namaOf(k)), `Pesan untuk ${namaOf(k)} tersalin.`);
     },
-    backup() {
-      if (!window.confirm('File cadangan berisi data pribadi pelamar dan tidak terenkripsi. Simpan di tempat aman. Lanjutkan?')) return;
-      download(`cadangan-lowongan-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(db), 'application/json');
+    async backup() {
+      const pw = await askPassword('Buat kata sandi cadangan', 'Minimal 8 karakter. Kata sandi ini tidak bisa dipulihkan bila lupa.');
+      if (!pw) return;
+      download(`cadangan-lowongan-${hariIni()}.json`, await R.enkripsi(JSON.stringify(db), pw), 'application/json');
     },
     restore() { $('restore-file').click(); },
   };
+
+  // Pengumuman yang sudah terbit ikut disesuaikan saat peserta dihapus atau nama tahap diganti.
+  // Hanya daftar yang pernah terbit yang dipakai, supaya centang yang masih draf tidak bocor.
+  function perbaruiTerbit(l, nomorDihapus) {
+    if (!cloudOn) return;
+    const sets = [];
+    l.tahapan.forEach(t => {
+      const v = (l.terbit || {})[t.id];
+      if (!v) return;
+      const data = { tahap: t.nama };
+      if (v !== true) {
+        v.lolos = v.lolos.filter(n => n !== nomorDihapus);
+        v.tidak = v.tidak.filter(n => n !== nomorDihapus);
+        Object.assign(data, { lolos: v.lolos, tidak: v.tidak });
+      }
+      sets.push([`pengumuman/${l.id}__${t.id}`, data]);
+    });
+    if (sets.length) C.apply(sets, []).catch(() => showBanner('Pengumuman di portal gagal disesuaikan. Terbitkan ulang tahap terkait.'));
+  }
+
+  function askPassword(judul, hint) {
+    const dlg = $('pw'), input = $('pw-in'), err = $('pw-err');
+    $('pw-judul').textContent = judul; $('pw-hint').textContent = hint;
+    input.value = ''; err.hidden = true;
+    dlg.showModal();
+    return new Promise(resolve => {
+      const done = v => { dlg.close(); $('pw-ok').onclick = null; $('pw-no').onclick = null; dlg.oncancel = null; resolve(v); };
+      $('pw-ok').onclick = () => {
+        if (input.value.length < 8) { err.hidden = false; err.textContent = 'Kata sandi minimal 8 karakter.'; input.focus(); return; }
+        done(input.value);
+      };
+      $('pw-no').onclick = () => done('');
+      dlg.oncancel = () => done('');
+    });
+  }
 
   // ---- Mode online ----
   async function reloadCloud() {
@@ -681,11 +730,11 @@
     }
     if (fresh.length) { await C.apply(fresh, []); await syncCloud(); }
     render();
+    cekMasaSimpan();
   }
 
   async function bootCloud() {
     cloudOn = true;
-    $('btn-restore').hidden = true;
     $('foot').textContent = 'Data pelamar tersimpan di server dan hanya bisa dibuka akun HR. Hapus lowongan yang masa simpan datanya sudah habis.';
     app.innerHTML = '<div class="empty">Memuat...</div>';
     let u;
@@ -705,8 +754,22 @@
 
   async function restoreFrom(file) {
     try {
-      const data = JSON.parse(await file.text());
+      let data = JSON.parse(await file.text());
+      if (data && data.format === 'lowongan-terenkripsi-1') {
+        const pw = await askPassword('Masukkan kata sandi cadangan', 'Kata sandi yang dibuat saat mengunduh cadangan.');
+        if (!pw) return;
+        try { data = JSON.parse(await R.dekripsi(data, pw)); } catch (e) { showBanner('Kata sandi salah atau berkas rusak.'); return; }
+      }
       if (!R.validBackup(data)) throw new Error('bentuk');
+      if (cloudOn) {
+        // Di server cadangan hanya menambah yang hilang, tidak pernah menimpa atau menghapus data yang lebih baru.
+        const lBaru = data.lowongan.filter(l => !db.lowongan.some(x => x.id === l.id));
+        const kBaru = data.kandidat.filter(k => !db.kandidat.some(x => x.id === k.id));
+        if (!window.confirm(`Tambahkan ${lBaru.length} lowongan dan ${kBaru.length} pelamar yang hilang dari server?`)) return;
+        db.lowongan.push(...lBaru); db.kandidat.push(...kBaru);
+        await flush(); showBanner(''); render();
+        return;
+      }
       if (!window.confirm(`Ganti semua data di browser ini dengan cadangan berisi ${data.lowongan.length} lowongan dan ${data.kandidat.length} pelamar?`)) return;
       db = data; factsCache.clear(); openIds.clear();
       view = { id: null, tab: 'kandidat', tahapId: null };
@@ -754,5 +817,6 @@
       showBanner('Browser ini tidak mengizinkan penyimpanan. Data akan hilang saat halaman ditutup, jadi unduh cadangan sebelum keluar.');
     }
     render();
+    cekMasaSimpan();
   })();
 })();

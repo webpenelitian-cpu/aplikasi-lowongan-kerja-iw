@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://www.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.gstatic.com; connect-src 'self' blob: https://cdnjs.cloudflare.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://www.google.com; frame-src https://*.firebaseapp.com https://*.web.app https://accounts.google.com https://www.google.com https://recaptcha.google.com; worker-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
-<meta name="referrer" content="no-referrer">
+<meta name="referrer" content="strict-origin">
 <meta name="robots" content="noindex">
 <title>Lowongan Kerja HR</title>
 <link rel="stylesheet" href="style.css">
@@ -27,6 +27,15 @@
 <p id="banner" class="banner noprint" role="alert" hidden></p>
 <main id="app" class="wrap" tabindex="-1"></main>
 <footer id="foot" class="wrap foot noprint">Data pelamar tersimpan hanya di browser perangkat ini dan tidak dikirim ke server. Cadangkan secara berkala, dan hapus data lowongan yang sudah selesai.</footer>
+
+<dialog id="pw" aria-labelledby="pw-judul">
+  <h3 id="pw-judul"></h3>
+  <p id="pw-hint" class="hint"></p>
+  <label for="pw-in">Kata sandi</label>
+  <input id="pw-in" type="password" autocomplete="new-password">
+  <p id="pw-err" class="warn" role="alert" hidden></p>
+  <div class="inline"><button type="button" id="pw-ok">Lanjutkan</button><button type="button" class="ghost" id="pw-no">Batal</button></div>
+</dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" integrity="sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz" crossorigin="anonymous"></script>
