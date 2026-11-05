@@ -129,9 +129,10 @@
 
   // Berkas cadangan bisa berasal dari luar, jadi bentuknya diperiksa sebelum dipakai.
   function validBackup(d) {
+    const idSah = x => typeof x === 'string' && /^[\w-]{1,64}$/.test(x); // id dipakai sebagai jalur dokumen
     return !!d && Array.isArray(d.lowongan) && Array.isArray(d.kandidat) &&
-      d.lowongan.every(l => l && typeof l.id === 'string' && typeof l.judul === 'string' && Array.isArray(l.tahapan) && l.criteria) &&
-      d.kandidat.every(k => k && typeof k.id === 'string' && typeof k.lowonganId === 'string');
+      d.lowongan.every(l => l && idSah(l.id) && typeof l.judul === 'string' && Array.isArray(l.tahapan) && l.criteria) &&
+      d.kandidat.every(k => k && idSah(k.id) && idSah(k.lowonganId));
   }
 
   // Kode lamaran: 16 karakter acak (80 bit), sulit ditebak, dan tanpa huruf yang mirip angka.
@@ -192,7 +193,7 @@
       }));
       out.set(`lowongan_hr/${l.id}`, clean({
         criteria: l.criteria, tahapan: l.tahapan, pengumuman: l.pengumuman || {},
-        nomorBerikut: l.nomorBerikut || 0, kode: l.kode || '', terbit: l.terbit || {}, hapusPada: l.hapusPada || '',
+        kode: l.kode || '', terbit: l.terbit || {}, hapusPada: l.hapusPada || '',
       }));
     });
     db.kandidat.forEach(k => {

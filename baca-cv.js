@@ -17,6 +17,7 @@
   }
 
   const MIN_FONT = 4;
+  const MAX_PAGES = 30;
 
   function linesOf(items) {
     const lines = [];
@@ -60,9 +61,10 @@
 
   async function pdfText(file) {    if (!root.pdfjsLib) throw new Error('Pembaca PDF belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
     pdfjsLib.GlobalWorkerOptions.workerSrc = await verifiedWorker();
-    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    // isEvalSupported dimatikan untuk menutup CVE-2024-4367; PDF yang sangat panjang dibatasi.
+    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise;
     const pages = [];
-    for (let n = 1; n <= doc.numPages; n++) {
+    for (let n = 1; n <= Math.min(doc.numPages, MAX_PAGES); n++) {
       const page = await doc.getPage(n);
       const content = await page.getTextContent();
       // Teks sangat kecil tidak terbaca manusia, jadi tidak ikut dinilai (trik menyisipkan kata kunci).

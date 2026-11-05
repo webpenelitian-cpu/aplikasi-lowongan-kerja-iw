@@ -61,12 +61,18 @@
   // ---- Portal pelamar ----
   async function listLowongan() {
     await initDb();
-    return rows(await F.getDocs(F.collection(db, 'lowongan')));
+    // Draf tidak boleh terbaca publik, jadi kueri harus menyebut status yang boleh dibaca.
+    return rows(await F.getDocs(F.query(F.collection(db, 'lowongan'), F.where('status', 'in', ['buka', 'tutup']))));
   }
   async function getLowongan(id) {
     await initDb();
-    const s = await F.getDoc(F.doc(db, 'lowongan', id));
-    return s.exists() ? { id: s.id, ...s.data() } : null;
+    try {
+      const s = await F.getDoc(F.doc(db, 'lowongan', id));
+      return s.exists() ? { id: s.id, ...s.data() } : null;
+    } catch (e) {
+      if (e && e.code === 'permission-denied') return null; // draf terlihat seperti tidak ada
+      throw e;
+    }
   }
   async function listPengumuman(lowonganId) {
     await initDb();

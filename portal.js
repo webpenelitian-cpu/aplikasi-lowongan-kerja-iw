@@ -97,7 +97,7 @@
   }
 
   async function detail(id) {
-    const [l, ann] = await Promise.all([C.getLowongan(id), C.listPengumuman(id)]);
+    const [l, ann] = await Promise.all([C.getLowongan(id), C.listPengumuman(id).catch(() => [])]);
     if (!l || l.status === 'draf') { setTitle('Tidak ditemukan'); app.innerHTML = '<div class="empty">Lowongan tidak ditemukan.</div>'; return; }
     setTitle(l.judul);
     ann.sort((a, b) => b.urutan - a.urutan);
