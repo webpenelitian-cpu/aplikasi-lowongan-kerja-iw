@@ -2,7 +2,7 @@
 // aturan tahapan dan pengumuman ada di rekrutmen.js.
 (function () {
   'use strict';
-  const S = window.Screening, R = window.Rekrutmen, C = window.Cloud;
+  const S = window.Screening, R = window.Rekrutmen, C = window.Cloud, TL = window.TemplatLowongan;
   const $ = id => document.getElementById(id);
   const app = $('app');
 
@@ -125,7 +125,7 @@
       const list = pelamar(l.id), st = list.map(k => R.progress(k, l.tahapan).state);
       const n = s => st.filter(x => x === s).length;
       return `<button type="button" class="job" data-act="open" data-id="${esc(l.id)}">
-        <span class="job-head"><strong>${esc(l.judul)}</strong>${l.contoh ? '<span class="badge b-cek">Contoh</span>' : `<span class="badge ${l.status === 'tutup' ? 'b-none' : 'b-lolos'}">${l.status === 'tutup' ? 'Ditutup' : 'Dibuka'}</span>`}</span>
+        <span class="job-head"><strong>${esc(l.judul)}</strong>${l.contoh ? '<span class="badge b-cek">Contoh</span>' : `<span class="badge ${l.status === 'buka' ? 'b-lolos' : 'b-none'}">${{ buka: 'Dibuka', tutup: 'Ditutup', draf: 'Draf' }[l.status] || 'Dibuka'}</span>`}</span>
         ${R.lewatMasaSimpan(l, hariIni()) ? '<span class="badge b-tidak">Masa simpan habis, hapus datanya</span>' : ''}
         <small>${esc([l.perusahaan, l.lokasiKerja].filter(Boolean).join(' · ') || 'Lengkapi info lowongan')}${l.tenggat ? ` · Tenggat ${esc(R.tanggalId(l.tenggat))}` : ''}</small>
         <span class="stats"><span><b>${list.length}</b> pelamar</span><span><b>${n('proses')}</b> dalam proses</span><span><b>${n('lolos')}</b> lolos</span><span><b>${n('gugur')}</b> tidak lolos</span></span>
@@ -133,9 +133,10 @@
     }).join('');
     const st = db.kandidat.map(k => { const l = db.lowongan.find(x => x.id === k.lowonganId); return l ? R.progress(k, l.tahapan).state : ''; });
     return `<h2 class="page-title">Dasbor rekrutmen</h2>
-      <div class="kpi"><div><b>${db.lowongan.filter(l => l.status !== 'tutup').length}</b><span>Lowongan dibuka</span></div><div><b>${st.filter(Boolean).length}</b><span>Total pelamar</span></div><div><b>${st.filter(x => x === 'proses').length}</b><span>Dalam proses</span></div><div><b>${st.filter(x => x === 'lolos').length}</b><span>Lolos semua tahap</span></div></div>
+      <div class="kpi"><div><b>${db.lowongan.filter(l => l.status === 'buka').length}</b><span>Lowongan dibuka</span></div><div><b>${st.filter(Boolean).length}</b><span>Total pelamar</span></div><div><b>${st.filter(x => x === 'proses').length}</b><span>Dalam proses</span></div><div><b>${st.filter(x => x === 'lolos').length}</b><span>Lolos semua tahap</span></div></div>
+      <section class="cta"><div><h3>Buat lowongan otomatis</h3><p class="note">Isi posisi dan jenjang. Aplikasi menyusun draf tanggung jawab, syarat, dan ketentuan screening, lalu Anda menambah atau mengurangi.</p></div><button type="button" data-act="wz-open">Mulai</button></section>
       <form class="new-job" data-form="new">
-        <label for="new-judul">Buat lowongan baru</label>
+        <label for="new-judul">Atau buat lowongan kosong</label>
         <div class="inline"><input id="new-judul" type="text" placeholder="Nama posisi, misalnya Site Engineer" required><button type="submit">Buat lowongan</button><button type="button" class="ghost" data-act="sample">Buat contoh lowongan</button></div>
       </form>
       <div class="jobs">${cards || '<div class="empty">Belum ada lowongan. Buat lowongan pertama di atas.</div>'}</div>`;
@@ -184,7 +185,7 @@
         <div class="field"><label for="i-perusahaan">Perusahaan</label><input id="i-perusahaan" type="text" value="${esc(l.perusahaan)}" data-l="perusahaan"></div>
         <div class="field"><label for="i-lokasi">Lokasi kerja</label><input id="i-lokasi" type="text" value="${esc(l.lokasiKerja)}" data-l="lokasiKerja"></div>
         <div class="field"><label for="i-tenggat">Tenggat lamaran</label><input id="i-tenggat" type="date" value="${esc(l.tenggat)}" data-l="tenggat"></div>
-        <div class="field"><label for="i-status">Status</label><select id="i-status" data-l="status"><option value="buka"${l.status !== 'tutup' ? ' selected' : ''}>Dibuka</option><option value="tutup"${l.status === 'tutup' ? ' selected' : ''}>Ditutup</option></select></div>
+        <div class="field"><label for="i-status">Status</label><select id="i-status" data-l="status"><option value="draf"${l.status === 'draf' ? ' selected' : ''}>Draf (belum tampil di portal)</option><option value="buka"${l.status === 'buka' ? ' selected' : ''}>Dibuka</option><option value="tutup"${l.status === 'tutup' ? ' selected' : ''}>Ditutup</option></select></div>
         <div class="field"><label for="i-desk">Deskripsi pekerjaan</label><textarea id="i-desk" rows="4" data-l="deskripsi">${esc(l.deskripsi)}</textarea></div>
         <div class="field"><label for="paste">Persyaratan</label>
           <textarea id="paste" rows="6" data-l="persyaratan" placeholder="Satu syarat per baris.&#10;Minimal S1 jurusan Teknik Sipil&#10;Pengalaman minimal 3 tahun&#10;Menguasai AutoCAD, Excel">${esc(l.persyaratan)}</textarea>
@@ -550,6 +551,7 @@
   function render() {
     const l = current();
     if (!l) view.id = null;
+    if (wz) { app.innerHTML = wz.draft ? wzDraftHtml() : wzAwalHtml(); document.title = 'Buat lowongan | Lowongan Kerja HR'; if (wz.draft) wzPreview(); return; }
     app.innerHTML = l ? detailHtml(l) : homeHtml();
     document.title = l ? `${l.judul} | Lowongan Kerja HR` : 'Lowongan Kerja HR';
     if (!l) return;
@@ -586,9 +588,92 @@
     k.jejak = (k.jejak || []).concat(entry).slice(-50);
   }
 
+  // ---- Formulir lowongan otomatis ----
+  let wz = null;
+
+  function wzBaru() {
+    const akhir = db.lowongan.find(x => !x.contoh) || {};
+    return { posisi: '', jenjang: 'madya', perusahaan: akhir.perusahaan || '', lokasi: '', kontak: akhir.kontak || '', retensi: akhir.retensi || '6 bulan setelah seleksi selesai', tenggat: '', draft: null };
+  }
+
+  function wzAwalHtml() {
+    const opsi = TL.TEMPLAT.map(t => `<option value="${esc(t.nama)}"></option>`).join('');
+    const isian = (id, label, k, attr) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" value="${esc(wz[k])}" data-wa="${k}" ${attr}></div>`;
+    return `<button type="button" class="back" data-act="wz-close">Kembali ke dasbor</button>
+      <form class="panel narrow" data-form="wz"><h2>Buat lowongan otomatis</h2><p class="note">Langkah 1 dari 2: ceritakan posisinya.</p>
+      ${isian('w-posisi', 'Nama posisi', 'posisi', 'type="text" list="w-daftar" required placeholder="Site Engineer"')}<datalist id="w-daftar">${opsi}</datalist>
+      <div class="field"><label for="w-jenjang">Jenjang</label><select id="w-jenjang" data-wa="jenjang">${TL.JENJANG.map(j => `<option value="${j.k}"${wz.jenjang === j.k ? ' selected' : ''}>${esc(j.label)}</option>`).join('')}</select></div>
+      ${isian('w-perusahaan', 'Perusahaan', 'perusahaan', 'type="text"')}
+      ${isian('w-lokasi', 'Lokasi kerja', 'lokasi', 'type="text"')}
+      ${isian('w-tenggat', 'Tenggat lamaran', 'tenggat', 'type="date"')}
+      ${isian('w-kontak', 'Kontak permintaan data pelamar', 'kontak', 'type="text" placeholder="Email HR"')}
+      ${isian('w-retensi', 'Masa simpan data pelamar', 'retensi', 'type="text"')}
+      <p id="w-err" class="warn" role="alert" hidden></p>
+      <button type="submit" class="start">Susun draf</button></form>`;
+  }
+
+  function wzGroup(key, judul, hint, wajib) {
+    const rows = wz.draft[key].map((x, i) => `<li><label class="consent"><input type="checkbox" data-wk="${key}" data-i="${i}" data-p="aktif"${x.aktif ? ' checked' : ''}> <span>${esc(x.t)}</span></label>
+      ${wajib ? `<label class="wajib"><input type="checkbox" data-wk="${key}" data-i="${i}" data-p="wajib"${x.wajib ? ' checked' : ''}> Wajib</label>` : ''}${x.catatan ? `<span class="hint">${esc(x.catatan)}</span>` : ''}</li>`).join('');
+    return `<fieldset class="wz-g"><legend>${judul}</legend>${hint ? `<p class="hint">${hint}</p>` : ''}<ul class="wz-list">${rows}</ul>
+      <div class="inline"><input type="text" id="wa-${key}" aria-label="Tambah ${esc(judul)}" placeholder="Tambah sendiri"><button type="button" class="ghost" data-act="wz-add" data-k="${key}">Tambah</button></div></fieldset>`;
+  }
+
+  function wzDraftHtml() {
+    const d = wz.draft, cocok = d.templat !== 'umum';
+    return `<button type="button" class="back" data-act="wz-back">Kembali ke langkah 1</button>
+      <div class="detail-head"><h2>Tinjau draf: ${esc(d.posisi)}</h2><span class="note">Langkah 2 dari 2</span></div>
+      <p class="${cocok ? 'info' : 'warn'}">${cocok ? `Draf disusun dari templat ${esc(TL.TEMPLAT.find(t => t.id === d.templat).nama)}, dirangkum dari profil jabatan O*NET (${esc(d.onet)}) dan pola lowongan di Indonesia.` : 'Posisi ini belum ada di pustaka, jadi draf berisi kerangka umum. Lengkapi sesuai kebutuhan jabatan.'} Hapus centang yang tidak perlu, tambahkan yang kurang, dan pastikan tiap syarat benar-benar dibutuhkan pekerjaan.</p>
+      <div class="two wz"><div class="stack">
+        <fieldset class="wz-g"><legend>Syarat dasar</legend>
+          <div class="field"><label for="wd-pend">Pendidikan minimal</label><select id="wd-pend" data-wf="pendidikan"><option value="">Tidak disyaratkan</option>${S.LEVELS.map(x => `<option value="${x.k}"${d.pendidikan === x.k ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>
+          <div class="field"><label for="wd-tahun">Pengalaman minimal (tahun)</label><input id="wd-tahun" type="number" min="0" step="0.5" value="${esc(d.tahun)}" data-wf="tahun"></div></fieldset>
+        ${wzGroup('tugas', 'Tanggung jawab', '')}
+        ${wzGroup('jurusan', 'Jurusan', 'Cukup cocok salah satu.')}
+        ${wzGroup('keahlian', 'Keahlian utama', 'Yang wajib harus ada di CV; pelamar tanpa itu gugur di screening. Tandai wajib seperlunya.', true)}
+        ${wzGroup('tambahan', 'Nilai tambah', 'Menambah skor, tidak menggugurkan.')}
+        ${wzGroup('sertifikat', 'Sertifikasi', '', true)}
+        ${wzGroup('ketentuan', 'Ketentuan seleksi', '')}
+      </div>
+      <aside class="stack wz-side"><section class="panel"><h3>Pratinjau lowongan</h3><div id="wz-prev"></div></section>
+        <p id="wz-warn" class="warn" role="alert" hidden></p>
+        <div class="inline"><button type="button" data-act="wz-save" data-s="draf">Simpan sebagai draf</button><button type="button" class="ghost" data-act="wz-save" data-s="buka">Langsung terbitkan</button></div>
+        <p class="hint">Draf belum tampil di portal. Setelah disimpan, ketentuan screening juga sudah terisi dan masih bisa diubah.</p></aside></div>`;
+  }
+
+  const labelLevel = k => { const x = S.levelOf(k); return x ? x.label : ''; };
+
+  function wzPreview() {
+    const box = $('wz-prev');
+    if (!box) return;
+    const t = TL.keTeks(wz.draft, labelLevel);
+    box.innerHTML = `<h4>Persyaratan</h4><p class="pre">${esc(t.persyaratan) || 'Belum ada.'}</p><h4>Deskripsi</h4><p class="pre">${esc(t.deskripsi) || 'Belum ada.'}</p>`;
+    const w = $('wz-warn'), semua = `${t.persyaratan}\n${t.deskripsi}`, hit = S.findProtected(semua.replace('penyandang disabilitas', ''));
+    w.hidden = !hit;
+    if (hit) w.textContent = `Draf memuat "${hit}". Menyaring pelamar berdasarkan ciri pribadi berisiko diskriminatif, kecuali memang disyaratkan pekerjaannya.`;
+  }
+
+  function wzSave(status) {
+    const d = wz.draft, t = TL.keTeks(d, labelLevel);
+    if (status === 'buka' && !(wz.perusahaan && wz.kontak && wz.retensi)) {
+      const w = $('wz-warn'); w.hidden = false;
+      w.textContent = 'Perusahaan, kontak, dan masa simpan data wajib diisi di langkah 1 sebelum terbit.';
+      return;
+    }
+    const posisi = d.posisi, extra = { perusahaan: wz.perusahaan, lokasiKerja: wz.lokasi, kontak: wz.kontak, retensi: wz.retensi, tenggat: wz.tenggat, deskripsi: t.deskripsi, persyaratan: t.persyaratan, status, criteria: TL.keKriteria(d, S.defaultCriteria()) };
+    wz = null;
+    createJob(posisi, extra);
+  }
+
   // ---- Peristiwa ----
   function onInput(e) {
     const el = e.target, l = current(), d = el.dataset;
+    if (wz) {
+      if (d.wa) wz[d.wa] = el.value;
+      else if (d.wf) { wz.draft[d.wf] = el.value; wzPreview(); }
+      else if (d.wk) { wz.draft[d.wk][+d.i][d.p] = el.checked; wzPreview(); }
+      return;
+    }
     if (el.id === 'search' && l) { query = el.value; renderList(l); return; }
     if (!l) return;
     const val = el.type === 'checkbox' ? el.checked : el.value;
@@ -611,6 +696,17 @@
     tab(el) { view.tab = el.dataset.tab; render(); },
     filter(el) { filter = el.dataset.f; renderList(current()); },
     parse() { applyParsed(current()); },
+    'wz-open'() { wz = wzBaru(); render(); },
+    'wz-close'() { wz = null; render(); },
+    'wz-back'() { wz.draft = null; render(); },
+    'wz-add'(el) {
+      const k = el.dataset.k, inp = $(`wa-${k}`), v = inp.value.trim();
+      if (!v) { inp.focus(); return; }
+      wz.draft[k].push({ t: v, aktif: true, wajib: false });
+      render();
+      $(`wa-${k}`).focus();
+    },
+    'wz-save'(el) { wzSave(el.dataset.s); },
     'view-board'() { view.tabel = false; render(); },
     'view-table'() { view.tabel = true; render(); },
     sample() {
@@ -818,6 +914,12 @@
   app.addEventListener('change', onInput);
   app.addEventListener('submit', e => {
     e.preventDefault();
+    if (e.target.dataset.form === 'wz') {
+      if (!wz.posisi.trim()) { const w = $('w-err'); w.hidden = false; w.textContent = 'Isi nama posisi.'; $('w-posisi').focus(); return; }
+      wz.draft = TL.susun(wz.posisi, wz.jenjang, TL.cari(wz.posisi));
+      render();
+      return;
+    }
     const v = $('new-judul').value.trim();
     if (v) createJob(v);
   });

@@ -49,7 +49,7 @@
 
   async function home() {
     setTitle('');
-    semua = (await C.listLowongan()).sort((a, b) => dibuka(b) - dibuka(a) || a.judul.localeCompare(b.judul));
+    semua = (await C.listLowongan()).filter(l => l.status !== 'draf').sort((a, b) => dibuka(b) - dibuka(a) || a.judul.localeCompare(b.judul));
     const lok = document.getElementById('lok'), pilih = saring.lok;
     lok.innerHTML = '<option value="">Semua lokasi</option>' + [...new Set(semua.map(l => l.lokasiKerja).filter(Boolean))].sort().map(x => `<option${x === pilih ? ' selected' : ''}>${esc(x)}</option>`).join('');
     app.innerHTML = `<div class="result-head"><h2 id="jumlah" role="status"></h2></div><div id="hasil" class="results"></div>
@@ -98,7 +98,7 @@
 
   async function detail(id) {
     const [l, ann] = await Promise.all([C.getLowongan(id), C.listPengumuman(id)]);
-    if (!l) { setTitle('Tidak ditemukan'); app.innerHTML = '<div class="empty">Lowongan tidak ditemukan.</div>'; return; }
+    if (!l || l.status === 'draf') { setTitle('Tidak ditemukan'); app.innerHTML = '<div class="empty">Lowongan tidak ditemukan.</div>'; return; }
     setTitle(l.judul);
     ann.sort((a, b) => b.urutan - a.urutan);
     const closed = l.contoh ? '<div class="info">Ini lowongan contoh untuk memperlihatkan alur seleksi. Lowongan ini tidak menerima lamaran.</div>'
