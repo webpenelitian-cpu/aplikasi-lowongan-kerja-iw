@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://cdnjs.cloudflare.com https://*.googleapis.com; worker-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Lowongan Kerja</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1><a class="home-link" href="#/">Lowongan Kerja</a></h1>
+    <p>Lihat lowongan, kirim lamaran, dan cek hasil seleksi Anda.</p>
+  </div>
+  <nav class="inline" aria-label="Menu utama">
+    <a class="linkbtn" href="#/">Lowongan</a>
+    <a class="linkbtn" href="#/cek">Cek hasil</a>
+  </nav>
+</header>
+<main id="app" class="wrap portal"></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" integrity="sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz" crossorigin="anonymous"></script>
+<script src="firebase-config.js"></script>
+<script src="cloud.js"></script>
+<script src="baca-cv.js"></script>
+<script src="rekrutmen.js"></script>
+<script src="portal.js"></script>
+</body>
+</html>
