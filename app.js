@@ -131,7 +131,10 @@
         <span class="stats"><span><b>${list.length}</b> pelamar</span><span><b>${n('proses')}</b> dalam proses</span><span><b>${n('lolos')}</b> lolos</span><span><b>${n('gugur')}</b> tidak lolos</span></span>
       </button>`;
     }).join('');
-    return `<form class="new-job" data-form="new">
+    const st = db.kandidat.map(k => { const l = db.lowongan.find(x => x.id === k.lowonganId); return l ? R.progress(k, l.tahapan).state : ''; });
+    return `<h2 class="page-title">Dasbor rekrutmen</h2>
+      <div class="kpi"><div><b>${db.lowongan.filter(l => l.status !== 'tutup').length}</b><span>Lowongan dibuka</span></div><div><b>${st.filter(Boolean).length}</b><span>Total pelamar</span></div><div><b>${st.filter(x => x === 'proses').length}</b><span>Dalam proses</span></div><div><b>${st.filter(x => x === 'lolos').length}</b><span>Lolos semua tahap</span></div></div>
+      <form class="new-job" data-form="new">
         <label for="new-judul">Buat lowongan baru</label>
         <div class="inline"><input id="new-judul" type="text" placeholder="Nama posisi, misalnya Site Engineer" required><button type="submit">Buat lowongan</button><button type="button" class="ghost" data-act="sample">Buat contoh lowongan</button></div>
       </form>
@@ -140,12 +143,12 @@
 
   // ---- Halaman lowongan ----
   function detailHtml(l) {
-    return `<div class="noprint">
+    return `<div class="shell"><aside class="side noprint">
       <button type="button" class="back" data-act="home">Semua lowongan</button>
       <div class="detail-head"><h2>${esc(l.judul)}</h2><span id="head-count" class="note">${pelamar(l.id).length} pelamar</span></div>
       <nav class="tabs" aria-label="Bagian lowongan">${TABS.map(([k, label]) => `<button type="button" data-act="tab" data-tab="${k}"${view.tab === k ? ' aria-current="page"' : ''}>${label}</button>`).join('')}</nav>
-    </div>
-    <div id="tab-body">${({ ringkasan: ringkasanHtml, ketentuan: ketentuanHtml, kandidat: kandidatHtml, tahapan: tahapanHtml, pengumuman: pengumumanHtml })[view.tab](l)}</div>`;
+    </aside>
+    <div id="tab-body">${({ ringkasan: ringkasanHtml, ketentuan: ketentuanHtml, kandidat: kandidatHtml, tahapan: tahapanHtml, pengumuman: pengumumanHtml })[view.tab](l)}</div></div>`;
   }
 
   function fieldHtml(l, f) {
@@ -361,10 +364,11 @@
   // ---- Tab tahapan ----
   function tahapanHtml(l) {
     return `<div class="stack">
-      <div class="result-head"><h3>Checklist peserta</h3>
-        <button type="button" class="ghost" data-act="apply-rec"${l.tahapan.length && pelamar(l.id).length ? '' : ' disabled'}>Isi ${esc(l.tahapan[0] ? l.tahapan[0].nama : 'tahap pertama')} dari rekomendasi</button></div>
+      <div class="result-head"><h3>Tahapan peserta</h3>
+        <div class="inline"><div class="seg" role="group" aria-label="Tampilan tahapan"><button type="button" data-act="view-board" aria-pressed="${!view.tabel}">Papan</button><button type="button" data-act="view-table" aria-pressed="${!!view.tabel}">Checklist</button></div>
+        <button type="button" class="ghost" data-act="apply-rec"${l.tahapan.length && pelamar(l.id).length ? '' : ' disabled'}>Isi ${esc(l.tahapan[0] ? l.tahapan[0].nama : 'tahap pertama')} dari rekomendasi</button></div></div>
       <p id="stage-note" class="note" role="status" hidden></p>
-      <div id="matrix">${matrixHtml(l)}</div>
+      <div id="matrix">${stageView(l)}</div>
       <details class="panel"${view.atur ? ' open' : ''}><summary>Atur tahapan</summary>
         <p class="hint">Nama dan keterangan tampil di portal. Pelaksana dan target hari hanya untuk tim HR.</p>
         <ol class="stages">${l.tahapan.map((t, i) => `<li>
@@ -381,6 +385,27 @@
         <button type="button" class="ghost start" data-act="stage-add">Tambah tahap</button>
       </details>
     </div>`;
+  }
+
+  const stageView = l => (view.tabel ? matrixHtml(l) : boardHtml(l));
+
+  function boardCard(k, l, t) {
+    const r = resultOf(k, l), skor = r && r.score !== null ? r.score : '-';
+    const who = esc(namaOf(k));
+    return `<li class="bcard"><strong>${who}</strong><small>${esc(k.nomor)} · Skor ${esc(skor)}</small>
+      ${t ? `<span class="tick">
+        <button type="button" class="ok" data-act="mark" data-k="${esc(k.id)}" data-t="${esc(t.id)}" data-v="lolos" aria-pressed="false" aria-label="${who} lolos ${esc(t.nama)}">&#10003;</button>
+        <button type="button" class="no" data-act="mark" data-k="${esc(k.id)}" data-t="${esc(t.id)}" data-v="tidak" aria-pressed="false" aria-label="${who} tidak lolos ${esc(t.nama)}">&#10005;</button></span>` : ''}</li>`;
+  }
+
+  // Papan kandidat: tiap kolom berisi peserta yang sedang menunggu di tahap itu.
+  function boardHtml(l) {
+    const list = pelamar(l.id);
+    if (!list.length) return '<div class="empty">Belum ada peserta. Unggah CV di tab Kandidat.</div>';
+    const pr = k => R.progress(k, l.tahapan);
+    const col = (judul, items, t, cls) => `<section class="bcol ${cls || ''}"><h4>${esc(judul)} <span>${items.length}</span></h4><ul>${items.map(k => boardCard(k, l, t)).join('')}</ul></section>`;
+    return `<div class="board" tabindex="0" aria-label="Papan peserta per tahap">${l.tahapan.map((t, i) => col(t.nama, list.filter(k => pr(k).state === 'proses' && pr(k).index === i), t)).join('')}
+      ${col('Lolos semua tahap', list.filter(k => pr(k).state === 'lolos'), null, 'b-ok')}${col('Tidak lolos', list.filter(k => pr(k).state === 'gugur'), null, 'b-no')}</div>`;
   }
 
   function matrixHtml(l) {
@@ -424,7 +449,7 @@
       else sisa++;
     });
     save();
-    $('matrix').innerHTML = matrixHtml(l);
+    $('matrix').innerHTML = stageView(l);
     const n = $('stage-note');
     n.hidden = false;
     n.textContent = `${lolos} ditandai lolos, ${tidak} tidak lolos, ${sisa} perlu keputusan Anda. Periksa dulu sebelum diumumkan. Semua tanda masih bisa diubah.`;
@@ -571,7 +596,7 @@
     else if (d.root) l.criteria[d.root] = val;
     else if (d.c) l.criteria[d.c][d.p] = val;
     else if (d.x !== undefined) l.criteria.tambahan[+d.x][d.p] = val;
-    else if (d.stage) { const t = l.tahapan.find(x => x.id === d.stage); if (t) { t[d.f] = val; if (e.type === 'change' && d.f === 'nama') { $('matrix').innerHTML = matrixHtml(l); perbaruiTerbit(l); } } }
+    else if (d.stage) { const t = l.tahapan.find(x => x.id === d.stage); if (t) { t[d.f] = val; if (e.type === 'change' && d.f === 'nama') { $('matrix').innerHTML = stageView(l); perbaruiTerbit(l); } } }
     else if (d.note) { const k = db.kandidat.find(x => x.id === d.note); if (k) k.catatan = val; }
     else if (d.a) { pengumumanState(l)[d.a] = val; renderAnnounce(l); }
     else if (d.pTahap !== undefined) { view.tahapId = val; render(); return; }
@@ -586,6 +611,8 @@
     tab(el) { view.tab = el.dataset.tab; render(); },
     filter(el) { filter = el.dataset.f; renderList(current()); },
     parse() { applyParsed(current()); },
+    'view-board'() { view.tabel = false; render(); },
+    'view-table'() { view.tabel = true; render(); },
     sample() {
       const ada = db.lowongan.find(l => l.contoh);
       if (ada) { view = { id: ada.id, tab: 'ringkasan', tahapId: null }; render(); return; }
@@ -615,7 +642,7 @@
     csv() { downloadCsv(current()); },
     mark(el) {
       const l = current(), k = db.kandidat.find(x => x.id === el.dataset.k);
-      if (k && R.setTahap(k, l.tahapan, el.dataset.t, el.dataset.v)) { catatKeputusan(k, l, el.dataset.t); save(); $('matrix').innerHTML = matrixHtml(l); }
+      if (k && R.setTahap(k, l.tahapan, el.dataset.t, el.dataset.v)) { catatKeputusan(k, l, el.dataset.t); save(); $('matrix').innerHTML = stageView(l); }
     },
     'apply-rec'() { applyRecommendations(current()); },
     'stage-add'() { const l = current(); l.tahapan.push({ id: R.uid(), nama: 'Tahap baru' }); save(); render(); },

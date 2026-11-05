@@ -17,18 +17,48 @@
 
   const setTitle = t => { document.title = t ? `${t} | Lowongan Kerja` : 'Lowongan Kerja'; };
 
+  const inisial = s => (String(s || '').replace(/\b(PT|CV|Tbk)\b\.?/gi, '').match(/[\p{L}\p{N}]+/gu) || ['L']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  const logo = l => `<span class="logo" aria-hidden="true">${esc(inisial(l.perusahaan || l.judul))}</span>`;
+  const cuplikan = s => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > 130 ? `${t.slice(0, 130).replace(/\s\S*$/, '')}...` : t; };
+
+  let semua = [];
+  const saring = { q: '', lok: '', status: 'semua' };
+  const STATUS = [['semua', 'Semua'], ['buka', 'Dibuka'], ['tutup', 'Ditutup']];
+
+  function kartu(l) {
+    const foot = l.contoh ? 'Lowongan contoh' : dibuka(l) ? (l.tenggat ? `Melamar sampai ${R.tanggalId(l.tenggat)}` : 'Menerima lamaran') : 'Pendaftaran ditutup';
+    return `<a class="job" href="#/l/${esc(l.id)}">${logo(l)}<span class="job-body">
+      <span class="job-head"><strong>${esc(l.judul)}</strong>${badgeOf(l)}</span>
+      <span class="job-co">${esc(l.perusahaan)}</span>
+      <small>${esc(l.lokasiKerja)}</small>
+      ${l.deskripsi ? `<span class="job-sn">${esc(cuplikan(l.deskripsi))}</span>` : ''}
+      <small class="job-ft">${esc(foot)}</small></span></a>`;
+  }
+
+  function daftar() {
+    const box = document.getElementById('hasil');
+    if (!box) return;
+    const q = saring.q.toLowerCase();
+    const list = semua.filter(l => (!q || `${l.judul} ${l.perusahaan} ${l.deskripsi} ${l.persyaratan}`.toLowerCase().includes(q))
+      && (!saring.lok || l.lokasiKerja === saring.lok)
+      && (saring.status === 'semua' || (saring.status === 'buka') === dibuka(l)));
+    document.getElementById('jumlah').textContent = `${list.length} lowongan`;
+    box.innerHTML = list.length ? list.map(kartu).join('') : '<div class="empty">Tidak ada lowongan yang cocok dengan pencarian ini.</div>';
+    document.getElementById('chips').innerHTML = STATUS.map(([k, v]) => `<button type="button" class="chip" data-s="${k}" aria-pressed="${saring.status === k}">${v}</button>`).join('');
+  }
+
   async function home() {
     setTitle('');
-    const list = (await C.listLowongan()).sort((a, b) => dibuka(b) - dibuka(a) || a.judul.localeCompare(b.judul));
-    app.innerHTML = `<section class="stack" aria-labelledby="h-list"><h2 id="h-list">Lowongan tersedia</h2>
-      ${list.length ? `<div class="jobs">${list.map(l => `<a class="job" href="#/l/${esc(l.id)}">
-        <span class="job-head"><strong>${esc(l.judul)}</strong>${badgeOf(l)}</span>
-        <small>${esc(meta(l))}</small></a>`).join('')}</div>` : '<div class="empty">Belum ada lowongan saat ini.</div>'}</section>
+    semua = (await C.listLowongan()).sort((a, b) => dibuka(b) - dibuka(a) || a.judul.localeCompare(b.judul));
+    const lok = document.getElementById('lok'), pilih = saring.lok;
+    lok.innerHTML = '<option value="">Semua lokasi</option>' + [...new Set(semua.map(l => l.lokasiKerja).filter(Boolean))].sort().map(x => `<option${x === pilih ? ' selected' : ''}>${esc(x)}</option>`).join('');
+    app.innerHTML = `<div class="result-head"><h2 id="jumlah" role="status"></h2></div><div id="hasil" class="results"></div>
       <div class="trust">
         <div><strong>Tanpa biaya</strong>Melamar dan mengikuti seleksi tidak dipungut biaya.</div>
         <div><strong>Kesempatan setara</strong>Penilaian berdasarkan kemampuan yang dibutuhkan pekerjaan.</div>
         <div><strong>Hasil transparan</strong>Pantau hasil tiap tahap dengan kode lamaran Anda.</div>
       </div>`;
+    daftar();
   }
 
   function announceHtml(p) {
@@ -74,14 +104,19 @@
     const closed = l.contoh ? '<div class="info">Ini lowongan contoh untuk memperlihatkan alur seleksi. Lowongan ini tidak menerima lamaran.</div>'
       : !dibuka(l) ? '<div class="empty">Pendaftaran untuk lowongan ini sudah ditutup.</div>'
         : !siap(l) ? '<div class="empty">Pendaftaran untuk lowongan ini belum dibuka.</div>' : '';
+    const bisa = !closed;
     app.innerHTML = `<a class="back" href="#/">Semua lowongan</a>
-      <div class="two"><section class="panel"><div class="job-head"><h2>${esc(l.judul)}</h2>${badgeOf(l)}</div><p class="note">${esc(meta(l))}</p>
+      <section class="job-top">${logo(l)}<div class="job-top-in"><div class="job-head"><h2>${esc(l.judul)}</h2>${badgeOf(l)}</div><p class="note">${esc(meta(l))}</p></div>
+        ${bisa ? '<button type="button" id="to-apply">Lamar sekarang</button>' : ''}</section>
+      <div class="two"><section class="panel">
         ${l.deskripsi ? `<h3>Deskripsi pekerjaan</h3><p class="pre">${esc(l.deskripsi)}</p>` : ''}
         ${l.persyaratan ? `<h3>Persyaratan</h3><p class="pre">${esc(l.persyaratan)}</p>` : ''}
         ${alurHtml(l)}
       </section><div class="stack">${closed || formHtml(l)}${ann.length ? `<section class="stack"><h3>Pengumuman</h3>${ann.map(announceHtml).join('')}<p class="hint">Hanya nomor peserta yang ditampilkan. Nomor Anda ada di halaman Cek hasil.</p></section>` : ''}</div></div>`;
     const form = document.getElementById('apply');
     if (form) form.addEventListener('submit', e => { e.preventDefault(); send(l, form); });
+    const go = document.getElementById('to-apply');
+    if (go) go.addEventListener('click', () => { form.scrollIntoView({ block: 'start' }); document.getElementById('a-nama').focus({ preventScroll: true }); });
   }
 
   function validate(v) {
@@ -178,6 +213,7 @@
   async function route() {
     if (!C.enabled()) { app.innerHTML = '<div class="empty">Portal lowongan belum tersedia.</div>'; return; }
     const parts = location.hash.replace(/^#\/?/, '').split('/');
+    document.getElementById('hero').hidden = !!parts[0];
     app.innerHTML = '<div class="empty">Memuat...</div>';
     window.scrollTo(0, 0);
     try {
@@ -191,6 +227,10 @@
     }
   }
 
+  document.getElementById('cari').addEventListener('submit', e => { e.preventDefault(); saring.q = document.getElementById('q').value.trim(); daftar(); });
+  document.getElementById('q').addEventListener('input', e => { saring.q = e.target.value.trim(); daftar(); });
+  document.getElementById('lok').addEventListener('change', e => { saring.lok = e.target.value; daftar(); });
+  document.getElementById('chips').addEventListener('click', e => { const k = e.target.dataset.s; if (k) { saring.status = k; daftar(); } });
   window.addEventListener('hashchange', route);
   route();
 })();

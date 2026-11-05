@@ -20,10 +20,18 @@
     </nav>
   </div>
 </header>
-<section class="hero">
+<section class="hero" id="hero">
   <div class="hero-in">
-    <h1>Karier dan lowongan kerja</h1>
-    <p>Lihat lowongan yang tersedia, kirim lamaran secara daring, dan pantau hasil seleksi Anda dengan kode lamaran.</p>
+    <h1>Temukan pekerjaan yang sesuai dengan Anda</h1>
+    <p>Kirim lamaran secara daring dan pantau hasil tiap tahap seleksi dengan kode lamaran.</p>
+    <form id="cari" class="search" role="search" novalidate>
+      <label class="sr" for="q">Cari jabatan atau perusahaan</label>
+      <input id="q" type="search" placeholder="Jabatan, perusahaan, atau kata kunci">
+      <label class="sr" for="lok">Lokasi</label>
+      <select id="lok"><option value="">Semua lokasi</option></select>
+      <button type="submit">Cari</button>
+    </form>
+    <div id="chips" class="chips" role="group" aria-label="Saring status lowongan"></div>
   </div>
 </section>
 <main id="app" class="wrap portal" tabindex="-1"></main>
