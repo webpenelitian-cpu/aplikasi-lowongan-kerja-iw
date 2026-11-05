@@ -2,10 +2,23 @@
 (function (root) {
   'use strict';
   const MAX_SIZE = 15 * 1024 * 1024;
+  const WORKER_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const WORKER_SHA384 = 'SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2';
+  let workerBlob = null;
+
+  // Worker melihat isi CV, jadi keasliannya diperiksa sebelum dijalankan (atribut integrity tidak berlaku untuk worker).
+  async function verifiedWorker() {
+    if (workerBlob) return workerBlob;
+    const buf = await (await fetch(WORKER_URL)).arrayBuffer();
+    const hash = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-384', buf))));
+    if (hash !== WORKER_SHA384) throw new Error('Pembaca PDF gagal diverifikasi. Muat ulang halaman atau gunakan file DOCX.');
+    workerBlob = URL.createObjectURL(new Blob([buf], { type: 'text/javascript' }));
+    return workerBlob;
+  }
 
   async function pdfText(file) {
     if (!root.pdfjsLib) throw new Error('Pembaca PDF belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = await verifiedWorker();
     const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
     const pages = [];
     for (let n = 1; n <= doc.numPages; n++) {

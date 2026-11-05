@@ -8,7 +8,7 @@
 
   const REC = { lolos: 'Lolos', pertimbangkan: 'Pertimbangkan', cek: 'Perlu cek manual', tidak: 'Tidak lolos' };
   const MARK = { ok: 'Terpenuhi', partial: 'Sebagian', no: 'Tidak', unknown: 'Tidak terbaca' };
-  const TABS = [['ketentuan', 'Ketentuan'], ['kandidat', 'Kandidat'], ['tahapan', 'Tahapan'], ['pengumuman', 'Pengumuman']];
+  const TABS = [['ringkasan', 'Ringkasan'], ['ketentuan', 'Ketentuan'], ['kandidat', 'Kandidat'], ['tahapan', 'Tahapan'], ['pengumuman', 'Pengumuman']];
 
   const FIELDS = [
     { k: 'pendidikan', label: 'Pendidikan minimal', type: 'level', wajib: true },
@@ -81,11 +81,13 @@
   const flush = () => {
     saveTimer = null;
     return cloudOn
-      ? syncCloud().catch(() => showBanner('Perubahan gagal tersimpan ke server. Periksa koneksi, lalu ulangi perubahan terakhir.'))
-      : writeDb().catch(() => showBanner('Data gagal tersimpan di browser ini. Unduh cadangan agar pekerjaan tidak hilang.'));
+      ? syncCloud().then(() => setSync('Tersimpan')).catch(() => { setSync('Belum tersimpan'); showBanner('Perubahan gagal tersimpan ke server. Periksa koneksi, lalu ulangi perubahan terakhir.'); })
+      : writeDb().then(() => setSync('Tersimpan')).catch(() => { setSync('Belum tersimpan'); showBanner('Data gagal tersimpan di browser ini. Unduh cadangan agar pekerjaan tidak hilang.'); });
   };
+  const setSync = text => { const s = $('sync'); if (s) s.textContent = text; };
   function save() {
     clearTimeout(saveTimer);
+    setSync('Menyimpan...');
     saveTimer = setTimeout(flush, cloudOn ? 1200 : 200);
   }
 
@@ -116,14 +118,14 @@
       const list = pelamar(l.id), st = list.map(k => R.progress(k, l.tahapan).state);
       const n = s => st.filter(x => x === s).length;
       return `<button type="button" class="job" data-act="open" data-id="${esc(l.id)}">
-        <span class="job-head"><strong>${esc(l.judul)}</strong><span class="badge ${l.status === 'tutup' ? 'b-none' : 'b-lolos'}">${l.status === 'tutup' ? 'Ditutup' : 'Dibuka'}</span></span>
+        <span class="job-head"><strong>${esc(l.judul)}</strong>${l.contoh ? '<span class="badge b-cek">Contoh</span>' : `<span class="badge ${l.status === 'tutup' ? 'b-none' : 'b-lolos'}">${l.status === 'tutup' ? 'Ditutup' : 'Dibuka'}</span>`}</span>
         <small>${esc([l.perusahaan, l.lokasiKerja].filter(Boolean).join(' · ') || 'Lengkapi info lowongan')}${l.tenggat ? ` · Tenggat ${esc(R.tanggalId(l.tenggat))}` : ''}</small>
         <span class="stats"><span><b>${list.length}</b> pelamar</span><span><b>${n('proses')}</b> dalam proses</span><span><b>${n('lolos')}</b> lolos</span><span><b>${n('gugur')}</b> tidak lolos</span></span>
       </button>`;
     }).join('');
     return `<form class="new-job" data-form="new">
         <label for="new-judul">Buat lowongan baru</label>
-        <div class="inline"><input id="new-judul" type="text" placeholder="Nama posisi, misalnya Site Engineer" required><button type="submit">Buat lowongan</button></div>
+        <div class="inline"><input id="new-judul" type="text" placeholder="Nama posisi, misalnya Site Engineer" required><button type="submit">Buat lowongan</button><button type="button" class="ghost" data-act="sample">Buat contoh lowongan</button></div>
       </form>
       <div class="jobs">${cards || '<div class="empty">Belum ada lowongan. Buat lowongan pertama di atas.</div>'}</div>`;
   }
@@ -135,7 +137,7 @@
       <div class="detail-head"><h2>${esc(l.judul)}</h2><span id="head-count" class="note">${pelamar(l.id).length} pelamar</span></div>
       <nav class="tabs" aria-label="Bagian lowongan">${TABS.map(([k, label]) => `<button type="button" data-act="tab" data-tab="${k}"${view.tab === k ? ' aria-current="page"' : ''}>${label}</button>`).join('')}</nav>
     </div>
-    <div id="tab-body">${({ ketentuan: ketentuanHtml, kandidat: kandidatHtml, tahapan: tahapanHtml, pengumuman: pengumumanHtml })[view.tab](l)}</div>`;
+    <div id="tab-body">${({ ringkasan: ringkasanHtml, ketentuan: ketentuanHtml, kandidat: kandidatHtml, tahapan: tahapanHtml, pengumuman: pengumumanHtml })[view.tab](l)}</div>`;
   }
 
   function fieldHtml(l, f) {
@@ -194,7 +196,7 @@
     const box = $('warn');
     if (!box) return;
     const c = l.criteria;
-    const hit = [c.keahlian.items, c.nilaiTambah.items, c.sertifikasi.items].concat(c.tambahan.map(t => `${t.label} ${t.kata}`)).map(S.findProtected).find(Boolean);
+    const hit = [l.persyaratan, c.keahlian.items, c.nilaiTambah.items, c.sertifikasi.items].concat(c.tambahan.map(t => `${t.label} ${t.kata}`)).map(S.findProtected).find(Boolean);
     box.hidden = !hit;
     if (hit) box.textContent = `Ketentuan memuat "${hit}". Menyaring pelamar berdasarkan ciri pribadi berisiko diskriminatif, kecuali memang disyaratkan pekerjaannya. Tinjau lagi sebelum dipakai.`;
   }
@@ -250,7 +252,7 @@
     return `<details class="card" data-id="${esc(k.id)}"${openIds.has(k.id) ? ' open' : ''}>
       <summary>
         <span class="rank">${i + 1}</span>
-        <span class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)} · ${esc(R.progressLabel(R.progress(k, l.tahapan)))}</small></span>
+        <span class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)} · ${esc(R.progressLabel(R.progress(k, l.tahapan)))}${k.talentPool ? ' · Setuju talent pool' : ''}</small></span>
         <span class="score"><span>${score === null ? '-' : score}</span><span class="bar"><i style="width:${score === null ? 0 : score}%"></i></span></span>
         ${rec ? `<span class="badge b-${rec}">${REC[rec]}</span>` : '<span class="badge b-none">Belum dinilai</span>'}
       </summary>
@@ -260,6 +262,8 @@
         ${r && r.checks.length ? `<ul class="checks">${r.checks.map(checkHtml).join('')}</ul>` : ''}
         ${f && f.email && pelamar(l.id).some(x => x !== k && factsOf(x) && factsOf(x).email.toLowerCase() === f.email.toLowerCase()) ? '<p class="warn">Email ini dipakai lebih dari satu lamaran pada lowongan ini.</p>' : ''}
         <div class="actions"><span class="note">File: ${esc(k.fileName)}${cloudOn ? ` · Kode cek hasil: ${esc(R.tampilKode(k.id))}` : ''}</span><button type="button" class="ghost" data-act="rm" data-id="${esc(k.id)}">Hapus pelamar ini</button></div>
+        <div class="field"><label for="n-${esc(k.id)}">Catatan penilaian</label><textarea id="n-${esc(k.id)}" rows="2" data-note="${esc(k.id)}" placeholder="Bukti yang mendukung keputusan, berkaitan dengan pekerjaan">${esc(k.catatan)}</textarea></div>
+        ${(k.jejak || []).length ? `<details class="raw"><summary>Riwayat keputusan</summary><ol class="jejak">${k.jejak.map(j => `<li>${esc(j.pada)} · ${esc(j.tahap)}: ${esc(j.hasil)}${j.oleh ? ` · ${esc(j.oleh)}` : ''}</li>`).join('')}</ol></details>` : ''}
         ${f ? `<details class="raw"><summary>Lihat teks yang terbaca</summary><pre>${esc(f.text)}</pre></details>` : ''}
       </div>
     </details>`;
@@ -290,6 +294,7 @@
     for (let i = 0; i < fresh.length; i++) {
       const f = fresh[i];
       note(`Membaca ${i + 1} dari ${fresh.length}: ${f.name}`);
+      if (cloudOn) { await flush(); l.nomorBerikut = await C.reserveNomor(l.id, 1); }
       const k = { id: R.buatKode(), lowonganId: l.id, nomor: R.nextNomor(l), fileName: f.name, size: f.size, error: '', text: null, tahap: {} };
       try {
         k.text = await BacaCV.read(f);
@@ -308,6 +313,40 @@
     save();
   }
 
+  // ---- Tab ringkasan ----
+  function kesiapan(l) {
+    const c = l.criteria;
+    const adaKriteria = S.LEVELS.some(x => x.k === c.pendidikan.level) || ['jurusan', 'keahlian'].some(k => c[k].items.trim()) || +c.pengalaman.tahun > 0;
+    return [
+      ['Perusahaan, kontak, dan masa simpan data terisi', !!(l.perusahaan && l.kontak && l.retensi)],
+      ['Persyaratan dan deskripsi pekerjaan terisi', !!(l.persyaratan && l.deskripsi)],
+      ['Ketentuan screening terisi', adaKriteria],
+      ['Tidak ada syarat ciri pribadi', !S.findProtected(l.persyaratan)],
+      ['Tiap tahap punya keterangan untuk pelamar', l.tahapan.length > 0 && l.tahapan.every(t => t.keterangan)],
+    ];
+  }
+
+  function ringkasanHtml(l) {
+    const list = pelamar(l.id), st = list.map(k => R.progress(k, l.tahapan).state);
+    const n = s => st.filter(x => x === s).length;
+    const hari = l.tahapan.reduce((a, t) => a + (+t.targetHari || 0), 0);
+    const f = R.funnel(list, l.tahapan), max = Math.max(list.length, 1);
+    return `<div class="stack">
+      <div class="kpi">
+        <div><b>${list.length}</b><span>Total pelamar</span></div>
+        <div><b>${n('proses')}</b><span>Dalam proses</span></div>
+        <div><b>${n('lolos')}</b><span>Lolos semua tahap</span></div>
+        <div><b>${n('gugur')}</b><span>Tidak lolos</span></div>
+        <div><b>${list.filter(k => k.talentPool).length}</b><span>Setuju talent pool</span></div>
+        <div><b>${hari}</b><span>Target hari seleksi</span></div>
+      </div>
+      <div class="two"><section class="panel"><h3>Kesiapan lowongan</h3>
+        <ul class="checks">${kesiapan(l).map(([t, ok]) => `<li><span class="mark m-${ok ? 'ok' : 'no'}">${ok ? 'Siap' : 'Belum'}</span><div>${esc(t)}</div></li>`).join('')}</ul></section>
+      <section class="stack"><h3>Saringan tahap</h3><div class="scroll"><table class="matrix funnel"><thead><tr><th scope="col">Tahap</th><th scope="col">Sampai</th><th scope="col">Lolos</th><th scope="col">Tidak</th><th scope="col">Menunggu</th><th scope="col">Porsi</th></tr></thead>
+        <tbody>${f.map(r => `<tr><th scope="row">${esc(r.tahap.nama)}</th><td>${r.sampai}</td><td>${r.lolos}</td><td>${r.tidak}</td><td>${r.menunggu}</td><td><progress max="${max}" value="${r.sampai}" aria-label="Porsi peserta di ${esc(r.tahap.nama)}"></progress></td></tr>`).join('')}</tbody></table></div></section></div>
+    </div>`;
+  }
+
   // ---- Tab tahapan ----
   function tahapanHtml(l) {
     return `<div class="stack">
@@ -316,11 +355,18 @@
       <p id="stage-note" class="note" role="status" hidden></p>
       <div id="matrix">${matrixHtml(l)}</div>
       <details class="panel"${view.atur ? ' open' : ''}><summary>Atur tahapan</summary>
+        <p class="hint">Nama dan keterangan tampil di portal. Pelaksana dan target hari hanya untuk tim HR.</p>
         <ol class="stages">${l.tahapan.map((t, i) => `<li>
-          <input type="text" value="${esc(t.nama)}" data-stage="${esc(t.id)}" aria-label="Nama tahap ${i + 1}">
+          <div class="stage-grid">
+            <input type="text" value="${esc(t.nama)}" data-stage="${esc(t.id)}" data-f="nama" aria-label="Nama tahap ${i + 1}">
+            <input type="text" value="${esc(t.pelaksana)}" data-stage="${esc(t.id)}" data-f="pelaksana" placeholder="Pelaksana" aria-label="Pelaksana tahap ${i + 1}">
+            <input type="number" min="0" value="${esc(t.targetHari)}" data-stage="${esc(t.id)}" data-f="targetHari" placeholder="Hari" aria-label="Target hari tahap ${i + 1}">
+            <textarea rows="2" data-stage="${esc(t.id)}" data-f="keterangan" placeholder="Keterangan untuk pelamar" aria-label="Keterangan tahap ${i + 1}">${esc(t.keterangan)}</textarea>
+          </div>
+          <div class="stage-btn">
           <button type="button" class="ghost" data-act="stage-up" data-id="${esc(t.id)}"${i === 0 ? ' disabled' : ''} aria-label="Naikkan ${esc(t.nama)}">Naik</button>
           <button type="button" class="ghost" data-act="stage-down" data-id="${esc(t.id)}"${i === l.tahapan.length - 1 ? ' disabled' : ''} aria-label="Turunkan ${esc(t.nama)}">Turun</button>
-          <button type="button" class="ghost" data-act="stage-del" data-id="${esc(t.id)}" aria-label="Hapus ${esc(t.nama)}">Hapus</button></li>`).join('')}</ol>
+          <button type="button" class="ghost" data-act="stage-del" data-id="${esc(t.id)}" aria-label="Hapus ${esc(t.nama)}">Hapus</button></div></li>`).join('')}</ol>
         <button type="button" class="ghost start" data-act="stage-add">Tambah tahap</button>
       </details>
     </div>`;
@@ -362,8 +408,8 @@
     pelamar(l.id).forEach(k => {
       if (R.statusOf(k, first)) return;
       const rec = recOf(k, l);
-      if (rec === 'lolos') { R.setTahap(k, l.tahapan, first.id, 'lolos'); lolos++; }
-      else if (rec === 'tidak') { R.setTahap(k, l.tahapan, first.id, 'tidak'); tidak++; }
+      if (rec === 'lolos') { R.setTahap(k, l.tahapan, first.id, 'lolos'); catatKeputusan(k, l, first.id); lolos++; }
+      else if (rec === 'tidak') { R.setTahap(k, l.tahapan, first.id, 'tidak'); catatKeputusan(k, l, first.id); tidak++; }
       else sisa++;
     });
     save();
@@ -448,17 +494,17 @@
   function csvCell(v) {
     let s = String(v === null || v === undefined ? '' : v);
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // isi CV tidak boleh terbaca sebagai rumus Excel
-    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }
 
   function downloadCsv(l) {
-    const head = ['Nomor', 'Nama', 'Email', 'Telepon', 'File', 'Skor', 'Rekomendasi', 'Pendidikan', 'IPK', 'Pengalaman (tahun)', 'Alasan'].concat(l.tahapan.map(t => t.nama), ['Status']);
+    const head = ['Nomor', 'Nama', 'Email', 'Telepon', 'File', 'Skor', 'Rekomendasi', 'Pendidikan', 'IPK', 'Pengalaman (tahun)', 'Alasan'].concat(l.tahapan.map(t => t.nama), ['Status', 'Talent pool', 'Catatan']);
     const label = { lolos: 'Lolos', tidak: 'Tidak lolos' };
     const rows = sortedCandidates(l).map(k => {
       const f = factsOf(k) || {}, r = resultOf(k, l), rec = recOf(k, l), lvl = S.levelOf(f.level);
       return [k.nomor, namaOf(k), f.email, f.phone, k.fileName, r && r.score !== null ? r.score : '', rec ? REC[rec] : 'Belum dinilai', lvl ? lvl.label : '',
         f.ipk === null || f.ipk === undefined ? '' : S.idn(f.ipk, 2), f.exp && f.exp.years !== null ? S.idn(f.exp.years) : '',
-        (k.error ? [k.error] : r ? r.alasan : []).join(' | ')].concat(l.tahapan.map(t => label[R.statusOf(k, t)] || ''), [R.progressLabel(R.progress(k, l.tahapan))]);
+        (k.error ? [k.error] : r ? r.alasan : []).join(' | ')].concat(l.tahapan.map(t => label[R.statusOf(k, t)] || ''), [R.progressLabel(R.progress(k, l.tahapan)), k.talentPool ? 'Ya' : '', k.catatan || '']);
     });
     const slug = l.judul.trim().replace(/[^\p{L}\p{N}]+/gu, '-');
     download(`kandidat-${slug}.csv`, '﻿' + [head].concat(rows).map(r => r.map(csvCell).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
@@ -469,6 +515,7 @@
     const l = current();
     if (!l) view.id = null;
     app.innerHTML = l ? detailHtml(l) : homeHtml();
+    document.title = l ? `${l.judul} | Lowongan Kerja HR` : 'Lowongan Kerja HR';
     if (!l) return;
     if (view.tab === 'kandidat') { bindDrop(); renderList(l); }
     if (view.tab === 'ketentuan') updateWarning(l);
@@ -486,14 +533,21 @@
     drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
   }
 
-  function createJob(judul) {
+  function createJob(judul, extra) {
     const criteria = S.defaultCriteria();
-    const l = { id: R.uid(), judul, perusahaan: '', lokasiKerja: '', tenggat: '', deskripsi: '', persyaratan: '', kontak: '', retensi: '', status: 'buka', criteria, tahapan: R.newTahapan(), pengumuman: {}, terbit: {} };
+    const l = { id: R.uid(), judul, perusahaan: '', lokasiKerja: '', tenggat: '', deskripsi: '', persyaratan: '', kontak: '', retensi: '', status: 'buka', criteria, tahapan: R.newTahapan(), pengumuman: {}, terbit: {}, ...(extra || {}) };
     db.lowongan.unshift(l);
-    view = { id: l.id, tab: 'ketentuan', tahapId: null };
+    view = { id: l.id, tab: extra ? 'ringkasan' : 'ketentuan', tahapId: null };
     filter = 'semua'; query = '';
     save();
     render();
+  }
+
+  // Jejak keputusan: siapa memutuskan apa dan kapan, untuk pertanggungjawaban seleksi.
+  function catatKeputusan(k, l, tahapId) {
+    const t = l.tahapan.find(x => x.id === tahapId), s = R.statusOf(k, t);
+    const entry = { pada: new Date().toLocaleString('id-ID'), tahap: t.nama, hasil: { lolos: 'Lolos', tidak: 'Tidak lolos' }[s] || 'Dibatalkan', oleh: C ? C.email() : '' };
+    k.jejak = (k.jejak || []).concat(entry).slice(-50);
   }
 
   // ---- Peristiwa ----
@@ -506,7 +560,8 @@
     else if (d.root) l.criteria[d.root] = val;
     else if (d.c) l.criteria[d.c][d.p] = val;
     else if (d.x !== undefined) l.criteria.tambahan[+d.x][d.p] = val;
-    else if (d.stage) { const t = l.tahapan.find(x => x.id === d.stage); if (t) { t.nama = val; if (e.type === 'change') $('matrix').innerHTML = matrixHtml(l); } }
+    else if (d.stage) { const t = l.tahapan.find(x => x.id === d.stage); if (t) { t[d.f] = val; if (e.type === 'change' && d.f === 'nama') $('matrix').innerHTML = matrixHtml(l); } }
+    else if (d.note) { const k = db.kandidat.find(x => x.id === d.note); if (k) k.catatan = val; }
     else if (d.a) { pengumumanState(l)[d.a] = val; renderAnnounce(l); }
     else if (d.pTahap !== undefined) { view.tahapId = val; render(); return; }
     else return;
@@ -516,10 +571,18 @@
 
   const ACTIONS = {
     home() { view = { id: null, tab: 'kandidat', tahapId: null }; render(); },
-    open(el) { view = { id: el.dataset.id, tab: 'kandidat', tahapId: null }; filter = 'semua'; query = ''; render(); },
+    open(el) { view = { id: el.dataset.id, tab: 'ringkasan', tahapId: null }; filter = 'semua'; query = ''; render(); },
     tab(el) { view.tab = el.dataset.tab; render(); },
     filter(el) { filter = el.dataset.f; renderList(current()); },
     parse() { applyParsed(current()); },
+    sample() {
+      const ada = db.lowongan.find(l => l.contoh);
+      if (ada) { view = { id: ada.id, tab: 'ringkasan', tahapId: null }; render(); return; }
+      const { judul, ...rest } = R.contohLowongan(), p = S.parseKetentuan(rest.persyaratan), c = S.defaultCriteria();
+      c.pendidikan.level = p.level; c.pengalaman.tahun = p.tahun; c.jurusan.items = p.jurusan.join(', ');
+      c.keahlian.items = p.keahlian.join(', '); c.nilaiTambah.items = p.nilaiTambah.join(', ');
+      createJob(judul, { ...rest, criteria: c });
+    },
     'custom-add'() { const l = current(); l.criteria.tambahan.push({ label: '', kata: '', wajib: false, bobot: 5 }); save(); render(); },
     'custom-del'(el) { const l = current(); l.criteria.tambahan.splice(+el.dataset.i, 1); save(); render(); },
     'del-job'() {
@@ -540,7 +603,7 @@
     csv() { downloadCsv(current()); },
     mark(el) {
       const l = current(), k = db.kandidat.find(x => x.id === el.dataset.k);
-      if (k && R.setTahap(k, l.tahapan, el.dataset.t, el.dataset.v)) { save(); $('matrix').innerHTML = matrixHtml(l); }
+      if (k && R.setTahap(k, l.tahapan, el.dataset.t, el.dataset.v)) { catatKeputusan(k, l, el.dataset.t); save(); $('matrix').innerHTML = matrixHtml(l); }
     },
     'apply-rec'() { applyRecommendations(current()); },
     'stage-add'() { const l = current(); l.tahapan.push({ id: R.uid(), nama: 'Tahap baru' }); save(); render(); },
@@ -551,6 +614,10 @@
       const used = pelamar(l.id).some(k => R.statusOf(k, t));
       if (used && !window.confirm(`Tahap ${t.nama} sudah berisi hasil peserta. Hapus tahap ini beserta hasilnya?`)) return;
       l.tahapan = l.tahapan.filter(x => x !== t);
+      if ((l.terbit || {})[t.id]) {
+        delete l.terbit[t.id];
+        if (cloudOn) C.apply([], [`pengumuman/${l.id}__${t.id}`]).catch(() => showBanner('Pengumuman tahap ini gagal dihapus dari portal.'));
+      }
       pelamar(l.id).forEach(k => R.normalize(k, l.tahapan));
       save(); render();
     },
@@ -591,7 +658,10 @@
       const tahap = l.tahapan.find(t => t.id === view.tahapId);
       copyText(R.personalMessage(k, l, tahap, el.dataset.s, o, namaOf(k)), `Pesan untuk ${namaOf(k)} tersalin.`);
     },
-    backup() { download(`cadangan-lowongan-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(db), 'application/json'); },
+    backup() {
+      if (!window.confirm('File cadangan berisi data pribadi pelamar dan tidak terenkripsi. Simpan di tempat aman. Lanjutkan?')) return;
+      download(`cadangan-lowongan-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(db), 'application/json');
+    },
     restore() { $('restore-file').click(); },
   };
 
@@ -603,12 +673,12 @@
     remember(R.docsFromDb(db));
     // Lamaran dari portal belum bernomor; nomor diberikan di sini agar pelamar bisa melihatnya.
     const fresh = [];
-    db.kandidat.filter(k => !k.nomor).forEach(k => {
-      const l = db.lowongan.find(x => x.id === k.lowonganId);
-      if (!l) return;
-      k.nomor = R.nextNomor(l);
-      fresh.push(R.hasilAwal(k, l));
-    });
+    for (const l of db.lowongan) {
+      const baru = db.kandidat.filter(k => !k.nomor && k.lowonganId === l.id);
+      if (!baru.length) continue;
+      l.nomorBerikut = await C.reserveNomor(l.id, baru.length);
+      baru.forEach(k => { k.nomor = R.nextNomor(l); fresh.push(R.hasilAwal(k, l)); });
+    }
     if (fresh.length) { await C.apply(fresh, []); await syncCloud(); }
     render();
   }
@@ -670,9 +740,9 @@
     if (e.target.files[0]) restoreFrom(e.target.files[0]);
     e.target.value = '';
   });
-  window.addEventListener('beforeunload', () => { if (saveTimer) flush(); });
+  window.addEventListener('beforeunload', e => { if (saveTimer) { flush(); e.preventDefault(); e.returnValue = ''; } });
 
-  window.__lowonganApp = { addFiles, flush }; // dipakai oleh pengujian
+  if (location.hostname === 'localhost') window.__lowonganApp = { addFiles, flush }; // hanya untuk pengujian lokal
 
   (async () => {
     if (C && C.enabled()) { await bootCloud(); return; }

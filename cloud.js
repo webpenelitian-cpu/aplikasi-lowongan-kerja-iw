@@ -12,6 +12,11 @@
     const [appMod, fsMod] = await Promise.all([import(`${SDK}/firebase-app.js`), import(`${SDK}/firebase-firestore.js`)]);
     F = fsMod;
     app = appMod.initializeApp(cfg);
+    // CAPTCHA tanpa teka-teki: tiap permintaan membawa token reCAPTCHA yang diperiksa Firebase.
+    if (cfg.recaptchaSiteKey) {
+      const ac = await import(`${SDK}/firebase-app-check.js`);
+      ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(cfg.recaptchaSiteKey), isTokenAutoRefreshEnabled: true });
+    }
     db = F.getFirestore(app);
   }
 
@@ -21,6 +26,8 @@
       A = await import(`${SDK}/firebase-auth.js`);
       auth = A.getAuth(app);
       auth.languageCode = 'id';
+      // Sesi berakhir saat browser ditutup, supaya data pelamar tidak terbuka di komputer bersama.
+      await A.setPersistence(auth, A.browserSessionPersistence);
     }
     user = await new Promise(res => { const off = A.onAuthStateChanged(auth, u => { off(); res(u); }); });
     return user;
@@ -33,6 +40,18 @@
     return user;
   }
   async function signOut() { await A.signOut(auth); user = null; }
+  const email = () => (user && user.email) || '';
+
+  // Nomor peserta diambil lewat transaksi agar dua akun HR tidak mendapat nomor yang sama.
+  async function reserveNomor(lowonganId, jumlah) {
+    const ref = F.doc(db, 'lowongan_hr', lowonganId);
+    return F.runTransaction(db, async tx => {
+      const s = await tx.get(ref);
+      const awal = (s.exists() && s.data().nomorBerikut) || 0;
+      tx.set(ref, { nomorBerikut: awal + jumlah }, { merge: true });
+      return awal;
+    });
+  }
   async function isAdmin() {
     try { return (await F.getDoc(F.doc(db, 'admins', user.uid))).exists(); } catch (e) { return false; }
   }
@@ -95,5 +114,5 @@
     }
   }
 
-  root.Cloud = { enabled, initHr, signIn, signOut, isAdmin, listLowongan, getLowongan, listPengumuman, submitLamaran, getHasil, loadAll, apply };
+  root.Cloud = { email, reserveNomor, enabled, initHr, signIn, signOut, isAdmin, listLowongan, getLowongan, listPengumuman, submitLamaran, getHasil, loadAll, apply };
 })(window);

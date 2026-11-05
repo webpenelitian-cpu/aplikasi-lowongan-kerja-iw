@@ -3,27 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: https://cdnjs.cloudflare.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com; frame-src https://*.firebaseapp.com https://*.web.app https://accounts.google.com; worker-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://www.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.gstatic.com; connect-src 'self' blob: https://cdnjs.cloudflare.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://www.google.com; frame-src https://*.firebaseapp.com https://*.web.app https://accounts.google.com https://www.google.com https://recaptcha.google.com; worker-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex">
 <title>Lowongan Kerja HR</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<a class="skip noprint" href="#app">Langsung ke isi</a>
 <header class="top noprint">
-  <div>
-    <h1><button type="button" class="home-link" data-act="home">Lowongan Kerja</button></h1>
-    <p>Kelola lowongan, saring CV, centang tahapan, dan umumkan hasilnya.</p>
-  </div>
-  <div class="inline">
-    <button type="button" class="ghost" id="btn-refresh" data-act="refresh" hidden>Muat lamaran baru</button>
-    <button type="button" class="ghost" data-act="backup">Cadangkan data</button>
-    <button type="button" class="ghost" id="btn-restore" data-act="restore">Pulihkan data</button>
-    <button type="button" class="ghost" id="btn-logout" data-act="logout" hidden>Keluar</button>
-    <input id="restore-file" type="file" accept=".json" hidden>
+  <div class="top-in">
+    <button type="button" class="brand" data-act="home"><b aria-hidden="true">LK</b><span>Lowongan Kerja<small>Ruang kerja HR</small></span></button>
+    <div class="inline">
+      <span id="sync" role="status"></span>
+      <button type="button" id="btn-refresh" data-act="refresh" hidden>Muat lamaran baru</button>
+      <button type="button" data-act="backup">Cadangkan data</button>
+      <button type="button" id="btn-restore" data-act="restore">Pulihkan data</button>
+      <button type="button" id="btn-logout" data-act="logout" hidden>Keluar</button>
+      <input id="restore-file" type="file" accept=".json" hidden>
+    </div>
   </div>
 </header>
 <p id="banner" class="banner noprint" role="alert" hidden></p>
-<main id="app" class="wrap"></main>
+<main id="app" class="wrap" tabindex="-1"></main>
 <footer id="foot" class="wrap foot noprint">Data pelamar tersimpan hanya di browser perangkat ini dan tidak dikirim ke server. Cadangkan secara berkala, dan hapus data lowongan yang sudah selesai.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>

@@ -2,10 +2,31 @@
 (function (root) {
   'use strict';
 
-  const DEFAULT_TAHAP = ['Seleksi CV', 'Psikotes', 'Wawancara HR', 'Wawancara User', 'Tes Kesehatan', 'Penawaran Kerja'];
+  // Halaman ini tidak boleh dimuat di dalam situs lain (mencegah clickjacking; GitHub Pages tidak bisa memasang header).
+  if (typeof window !== 'undefined' && window.top !== window.self) document.documentElement.innerHTML = '';
+
+  // Urutan mengikuti alur attract, assess, decide, pre-boarding. Pemeriksaan kesehatan ditaruh setelah penawaran bersyarat.
+  const DEFAULT_TAHAP = [
+    { nama: 'Seleksi Administrasi', keterangan: 'Tim HR memeriksa kesesuaian CV dengan persyaratan jabatan.', pelaksana: 'Tim HR', targetHari: 5 },
+    { nama: 'Asesmen Kompetensi', keterangan: 'Tes keterampilan kerja sesuai jabatan. Psikotes, bila dipakai, dijalankan oleh psikolog berizin.', pelaksana: 'Tim HR dan psikolog', targetHari: 7 },
+    { nama: 'Wawancara HR', keterangan: 'Wawancara terstruktur tentang pengalaman dan cara kerja, dengan pertanyaan yang sama untuk semua peserta.', pelaksana: 'Tim HR', targetHari: 5 },
+    { nama: 'Wawancara Teknis', keterangan: 'Panel dari unit kerja menilai kemampuan teknis memakai lembar penilaian yang sama.', pelaksana: 'Panel unit kerja', targetHari: 5 },
+    { nama: 'Verifikasi Dokumen dan Referensi', keterangan: 'Pemeriksaan salinan ijazah, sertifikat, dan referensi atas persetujuan Anda. Dokumen asli tidak ditahan.', pelaksana: 'Tim HR', targetHari: 5 },
+    { nama: 'Penawaran Kerja Bersyarat', keterangan: 'Penawaran tertulis berisi jabatan, status hubungan kerja, dan paket remunerasi.', pelaksana: 'Tim HR dan pimpinan', targetHari: 3 },
+    { nama: 'Pemeriksaan Kesehatan', keterangan: 'Dilakukan setelah penawaran bersyarat, terbatas pada hal yang relevan dengan jabatan.', pelaksana: 'Klinik rekanan', targetHari: 5 },
+    { nama: 'Persiapan Bergabung', keterangan: 'Kelengkapan administrasi dan jadwal hari pertama kerja.', pelaksana: 'Tim HR', targetHari: 7 },
+  ];
   let counter = 0;
   const uid = () => Date.now().toString(36) + (counter++).toString(36);
-  const newTahapan = () => DEFAULT_TAHAP.map(nama => ({ id: uid(), nama }));
+  const newTahapan = () => DEFAULT_TAHAP.map(t => ({ id: uid(), ...t }));
+
+  // Contoh ini ditutup dan ditandai agar tidak ada orang yang mengira lowongannya sungguhan.
+  const contohLowongan = () => ({
+    judul: 'CONTOH: Site Engineer', perusahaan: 'PT Contoh Konstruksi (fiktif)', lokasiKerja: 'Bekasi', tenggat: '',
+    deskripsi: 'Ini lowongan contoh untuk memperlihatkan tampilan dan alur seleksi. Lowongan ini tidak nyata dan tidak menerima lamaran.\n\nTanggung jawab utama:\n- Mengawasi pelaksanaan pekerjaan struktur sesuai gambar dan spesifikasi.\n- Menyusun laporan progres mingguan.\n- Berkoordinasi dengan tim mutu, K3, dan pengadaan.',
+    persyaratan: 'Minimal S1 jurusan Teknik Sipil\nPengalaman minimal 3 tahun\nMenguasai AutoCAD, Microsoft Excel\nDiutamakan memiliki SKK',
+    kontak: 'hr@contoh.test', retensi: '6 bulan setelah seleksi selesai', status: 'tutup', contoh: true,
+  });
 
   const statusOf = (k, t) => (k.tahap && k.tahap[t.id]) || '';
 
@@ -123,20 +144,36 @@
   const tampilKode = k => k.match(/.{1,4}/g).join('-');
 
   // Yang terbit ke publik: hanya nomor peserta dan hasil tahap ini, tanpa nama, kontak, atau skor.
+  // Hasil tiap peserta disusun dari SEMUA tahap yang sudah terbit, supaya menerbitkan ulang tahap lama
+  // tidak menimpa hasil tahap yang lebih baru, dan hasil yang dibatalkan HR tidak tertinggal.
   function publishPayload(l, list, index, opts) {
     const tahap = l.tahapan[index], g = groupsAt(list, l.tahapan, index);
-    const riwayat = k => l.tahapan.slice(0, index + 1).map(t => ({ nama: t.nama, status: statusOf(k, t) }));
-    const hasil = (k, status) => [`hasil/${k.id}`, {
-      nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', status, tahap: tahap.nama,
-      riwayat: riwayat(k), pesan: status === 'lolos' ? (opts.tindak || '') : '',
-    }];
+    const terbit = { ...(l.terbit || {}), [tahap.id]: true };
+    const tindakOf = t => (t.id === tahap.id ? opts.tindak : ((l.pengumuman || {})[t.id] || {}).tindak) || '';
     const sets = [[`pengumuman/${l.id}__${tahap.id}`, {
       lowonganId: l.id, tahap: tahap.nama, urutan: index, tanggal: opts.tanggal || '', tindak: opts.tindak || '',
       lolos: g.lolos.map(k => k.nomor), tidak: g.tidak.map(k => k.nomor),
     }]];
-    g.lolos.forEach(k => sets.push(hasil(k, 'lolos')));
-    g.tidak.forEach(k => sets.push(hasil(k, 'tidak')));
+    list.forEach(k => {
+      let last = -1;
+      l.tahapan.forEach((t, i) => { if (terbit[t.id] && statusOf(k, t)) last = i; });
+      if (last < 0) { sets.push(hasilAwal(k, l)); return; }
+      const t = l.tahapan[last], status = statusOf(k, t);
+      sets.push([`hasil/${k.id}`, {
+        nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', status, tahap: t.nama,
+        riwayat: l.tahapan.slice(0, last + 1).map(x => ({ nama: x.nama, status: statusOf(k, x) })),
+        pesan: status === 'lolos' ? tindakOf(t) : '',
+      }]);
+    });
     return sets;
+  }
+
+  // Saringan tahap: jumlah peserta yang sampai, lolos, tidak lolos, dan masih menunggu di tiap tahap.
+  function funnel(list, tahapan) {
+    return tahapan.map((t, i) => {
+      const g = groupsAt(list, tahapan, i);
+      return { tahap: t, sampai: g.lolos.length + g.tidak.length + g.belum.length, lolos: g.lolos.length, tidak: g.tidak.length, menunggu: g.belum.length };
+    });
   }
 
   const hasilAwal = (k, l) => [`hasil/${k.id}`, { nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', status: 'proses', tahap: '', riwayat: [], pesan: '' }];
@@ -150,7 +187,8 @@
         judul: l.judul, perusahaan: l.perusahaan || '', lokasiKerja: l.lokasiKerja || '', tenggat: l.tenggat || '',
         tutupPada: l.tenggat ? `${l.tenggat}T23:59:59+07:00` : '2100-01-01T00:00:00+07:00',
         deskripsi: l.deskripsi || '', persyaratan: l.persyaratan || '', status: l.status || 'buka',
-        kontak: l.kontak || '', retensi: l.retensi || '',
+        kontak: l.kontak || '', retensi: l.retensi || '', contoh: !!l.contoh,
+        alur: (l.tahapan || []).map(t => ({ nama: t.nama, keterangan: t.keterangan || '' })),
       }));
       out.set(`lowongan_hr/${l.id}`, clean({
         criteria: l.criteria, tahapan: l.tahapan, pengumuman: l.pengumuman || {},
@@ -162,6 +200,7 @@
         lowonganId: k.lowonganId, nomor: k.nomor || '', fileName: k.fileName || '', size: k.size || 0, error: k.error || '',
         cvText: k.text === undefined ? null : k.text, tahap: k.tahap || {},
         nama: k.nama || '', email: k.email || '', telepon: k.telepon || '',
+        catatan: k.catatan || '', jejak: k.jejak || [],
       }));
     });
     return out;
@@ -175,5 +214,5 @@
     return [];
   }
 
-  root.Rekrutmen = { buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
+  root.Rekrutmen = { contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
 })(typeof window !== 'undefined' ? window : globalThis);
