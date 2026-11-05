@@ -16,6 +16,25 @@
     return workerBlob;
   }
 
+  // Pustaka pembaca (lebih dari 900 KB) baru diunduh saat ada file yang dibaca, bukan untuk setiap pengunjung.
+  const LIB = {
+    pdf: { url: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', sri: 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e', nama: 'pdfjsLib' },
+    docx: { url: 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', sri: 'sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz', nama: 'mammoth' },
+  };
+  function muat(lib) {
+    if (root[lib.nama]) return Promise.resolve();
+    if (!lib.janji) {
+      lib.janji = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = lib.url; s.integrity = lib.sri; s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = () => { lib.janji = null; reject(new Error('Pembaca file gagal dimuat. Periksa koneksi internet lalu coba lagi.')); };
+        document.head.appendChild(s);
+      });
+    }
+    return lib.janji;
+  }
+
   const MIN_FONT = 4;
   const MAX_PAGES = 30;
 
@@ -59,7 +78,7 @@
     return left.size >= 8 && right.size >= 8 ? g : null;
   }
 
-  async function pdfText(file) {    if (!root.pdfjsLib) throw new Error('Pembaca PDF belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
+  async function pdfText(file) {    await muat(LIB.pdf);
     pdfjsLib.GlobalWorkerOptions.workerSrc = await verifiedWorker();
     // isEvalSupported dimatikan untuk menutup CVE-2024-4367; PDF yang sangat panjang dibatasi.
     const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise;
@@ -81,7 +100,7 @@
   }
 
   async function docxText(file) {
-    if (!root.mammoth) throw new Error('Pembaca DOCX belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
+    await muat(LIB.docx);
     return (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value;
   }
 

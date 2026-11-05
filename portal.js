@@ -21,7 +21,7 @@
   const logo = l => `<span class="logo" aria-hidden="true">${esc(inisial(l.perusahaan || l.judul))}</span>`;
   const cuplikan = s => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > 130 ? `${t.slice(0, 130).replace(/\s\S*$/, '')}...` : t; };
 
-  let semua = [];
+  let semua = [], dimuat = 0;
   const saring = { q: '', lok: '', status: 'semua' };
   const STATUS = [['semua', 'Semua'], ['buka', 'Dibuka'], ['tutup', 'Ditutup']];
 
@@ -49,7 +49,9 @@
 
   async function home() {
     setTitle('');
-    semua = (await C.listLowongan()).filter(l => l.status !== 'draf').sort((a, b) => dibuka(b) - dibuka(a) || a.judul.localeCompare(b.judul));
+    // Daftar disimpan sebentar agar pindah halaman tidak membaca server lagi.
+    if (Date.now() - dimuat > 60000) { semua = await C.listLowongan(); dimuat = Date.now(); }
+    semua = semua.filter(l => l.status !== 'draf').sort((a, b) => dibuka(b) - dibuka(a) || a.judul.localeCompare(b.judul));
     const lok = document.getElementById('lok'), pilih = saring.lok;
     lok.innerHTML = '<option value="">Semua lokasi</option>' + [...new Set(semua.map(l => l.lokasiKerja).filter(Boolean))].sort().map(x => `<option${x === pilih ? ' selected' : ''}>${esc(x)}</option>`).join('');
     app.innerHTML = `<div class="result-head"><h2 id="jumlah" role="status"></h2></div><div id="hasil" class="results"></div>
@@ -81,6 +83,7 @@
   function formHtml(l) {
     return `<form id="apply" class="panel" novalidate>
       <h3>Kirim lamaran</h3>
+      <div class="jebak" aria-hidden="true"><label for="a-situs">Situs web</label><input id="a-situs" type="text" tabindex="-1" autocomplete="off"></div>
       ${fieldInput('a-nama', 'Nama lengkap', 'type="text" maxlength="100" autocomplete="name"')}
       ${fieldInput('a-email', 'Email', 'type="email" maxlength="120" autocomplete="email"')}
       ${fieldInput('a-telp', 'Nomor telepon', 'type="tel" maxlength="20" autocomplete="tel"')}
@@ -97,7 +100,8 @@
   }
 
   async function detail(id) {
-    const [l, ann] = await Promise.all([C.getLowongan(id), C.listPengumuman(id).catch(() => [])]);
+    const tersimpan = Date.now() - dimuat < 60000 ? semua.find(x => x.id === id) : null;
+    const [l, ann] = await Promise.all([tersimpan || C.getLowongan(id), C.listPengumuman(id).catch(() => [])]);
     if (!l || l.status === 'draf') { setTitle('Tidak ditemukan'); app.innerHTML = '<div class="empty">Lowongan tidak ditemukan.</div>'; return; }
     setTitle(l.judul);
     ann.sort((a, b) => b.urutan - a.urutan);
@@ -114,6 +118,7 @@
         ${alurHtml(l)}
       </section><div class="stack">${closed || formHtml(l)}${ann.length ? `<section class="stack"><h3>Pengumuman</h3>${ann.map(announceHtml).join('')}<p class="hint">Hanya nomor peserta yang ditampilkan. Nomor Anda ada di halaman Cek hasil.</p></section>` : ''}</div></div>`;
     const form = document.getElementById('apply');
+    formDibuka = Date.now();
     if (form) form.addEventListener('submit', e => { e.preventDefault(); send(l, form); });
     const go = document.getElementById('to-apply');
     if (go) go.addEventListener('click', () => { form.scrollIntoView({ block: 'start' }); document.getElementById('a-nama').focus({ preventScroll: true }); });
@@ -128,6 +133,14 @@
     return null;
   }
 
+  // Penahan dasar untuk bot sederhana. Pembatas utama tetap App Check dan aturan server.
+  let formDibuka = 0;
+  const JEDA_KIRIM = 60000;
+  const kunciKirim = id => `lamaran-terkirim-${id}`;
+  function baruKirim(id) {
+    try { return Date.now() - Number(localStorage.getItem(kunciKirim(id)) || 0) < JEDA_KIRIM; } catch (e) { return false; }
+  }
+
   async function send(l, form) {
     const $ = id => document.getElementById(id), val = id => $(id).value.trim();
     const err = $('a-err'), btn = form.querySelector('button[type=submit]');
@@ -139,6 +152,8 @@
     const v = { nama: val('a-nama'), email: val('a-email'), telepon: val('a-telp'), file: $('a-cv').files[0], setuju: $('a-setuju').checked };
     const problem = validate(v);
     if (problem) { fail(problem[1], problem[0]); return; }
+    if ($('a-situs').value || Date.now() - formDibuka < 3000) { fail('Lamaran belum terkirim. Periksa isian Anda lalu coba lagi.'); return; }
+    if (baruKirim(l.id)) { fail('Lamaran untuk lowongan ini baru saja terkirim dari perangkat ini. Tunggu satu menit bila ingin mengirim lamaran lain.'); return; }
     err.hidden = true; btn.disabled = true; btn.textContent = 'Mengirim...';
     let text;
     try { text = await BacaCV.read(v.file); } catch (e) { fail(BacaCV.friendlyError(e), 'a-cv'); return; }
@@ -146,6 +161,7 @@
     const kode = R.buatKode();
     try {
       await C.submitLamaran(kode, { lowonganId: l.id, nama: v.nama, email: v.email, telepon: v.telepon, fileName: v.file.name.slice(0, 200), size: v.file.size, cvText: text.slice(0, 100000), persetujuan: true, talentPool: $('a-pool').checked });
+      try { localStorage.setItem(kunciKirim(l.id), String(Date.now())); } catch (e) { /* mode privat */ }
       success(l, kode);
     } catch (e) {
       fail('Lamaran belum terkirim. Lowongan mungkin sudah ditutup, atau koneksi terputus. Silakan coba lagi.');

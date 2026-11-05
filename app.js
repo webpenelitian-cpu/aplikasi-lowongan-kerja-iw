@@ -69,7 +69,15 @@
 
   async function syncCloud() {
     const next = R.docsFromDb(db), sets = [], dels = [];
-    next.forEach((v, p) => { if (snapshot.get(p) !== JSON.stringify(v)) sets.push([p, v]); });
+    // Hanya kolom yang berubah: CV tidak dikirim ulang, dan kolom yang diubah HR lain tidak tertimpa.
+    next.forEach((v, p) => {
+      const lama = snapshot.get(p);
+      if (lama === JSON.stringify(v)) return;
+      if (lama === undefined) { sets.push([p, v]); return; }
+      const o = JSON.parse(lama), beda = {};
+      Object.keys(v).forEach(f => { if (JSON.stringify(v[f]) !== JSON.stringify(o[f])) beda[f] = v[f]; });
+      sets.push([p, beda]);
+    });
     snapshot.forEach((old, p) => { if (!next.has(p)) dels.push(p, ...R.followDeletes(p, old)); });
     if (!sets.length && !dels.length) return;
     await C.apply(sets, dels);
@@ -113,10 +121,10 @@
   const resultOf = (k, l) => {
     const f = factsOf(k);
     if (!f || k.error) return null;
-    const key = JSON.stringify(l.criteria), c = resCache.get(k.id);
+    const id = `${k.id}:${l.id}`, key = JSON.stringify(l.criteria), c = resCache.get(id);
     if (c && c.key === key && c.f === f) return c.r;
     const r = S.evaluate(f, l.criteria);
-    resCache.set(k.id, { key, f, r });
+    resCache.set(id, { key, f, r });
     return r;
   };
   const recOf = (k, l) => { if (k.error) return 'cek'; const r = resultOf(k, l); return (r && r.rekomendasi) || null; };
@@ -125,7 +133,7 @@
     return pelamar(l.id).map(k => {
       const r = resultOf(k, l);
       return { k, rank: S.RANK[recOf(k, l)], score: r && r.score !== null ? r.score : -1 };
-    }).sort((a, b) => (a.rank === undefined ? 9 : a.rank) - (b.rank === undefined ? 9 : b.rank) || b.score - a.score || a.k.nomor.localeCompare(b.k.nomor)).map(x => x.k);
+    }).sort((a, b) => (a.rank === undefined ? 9 : a.rank) - (b.rank === undefined ? 9 : b.rank) || b.score - a.score || String(a.k.nomor || '').localeCompare(String(b.k.nomor || ''))).map(x => x.k);
   }
 
   const hariIni = () => new Date().toLocaleDateString('en-CA'); // format YYYY-MM-DD pada zona waktu perangkat
@@ -136,35 +144,131 @@
   }
 
   // ---- Beranda ----
-  function homeHtml() {
+  const HR_MENU = [['dasbor', 'Dasbor rekrutmen'], ['lowongan', 'Lowongan'], ['pool', 'Talent pool']];
+  const STATUS_L = { buka: 'Dibuka', tutup: 'Ditutup', draf: 'Draf' };
+  const badgeL = l => (l.contoh ? '<span class="badge b-cek">Contoh</span>' : `<span class="badge ${l.status === 'buka' ? 'b-lolos' : 'b-none'}">${STATUS_L[l.status] || 'Dibuka'}</span>`);
+  const kpi = (cls, rows) => `<div class="kpi ${cls}">${rows.map(([n, label]) => `<div><b>${esc(n)}</b><span>${esc(label)}</span></div>`).join('')}</div>`;
+  const stat = l => { const list = pelamar(l.id), st = list.map(k => R.progress(k, l.tahapan).state), n = s => st.filter(x => x === s).length; return { list, total: list.length, proses: n('proses'), lolos: n('lolos'), gugur: n('gugur') }; };
+
+  // Batang satu warna: panjang menunjukkan jumlah, angka dan label selalu tertulis.
+  function bars(rows, kosong, tampilNol) {
+    if (!tampilNol && !rows.some(r => r.n)) return `<p class="note">${esc(kosong)}</p>`;
+    const max = Math.max(1, ...rows.map(r => r.n));
+    return `<ul class="bars">${rows.map(r => `<li title="${esc(r.label)}: ${r.n}"><span class="bl">${esc(r.label)}${r.sub ? `<small>${esc(r.sub)}</small>` : ''}</span><span class="bt"><i style="width:${Math.round(r.n / max * 100)}%"></i></span><b>${r.n}</b></li>`).join('')}</ul>`;
+  }
+
+  function tindakan() {
+    const out = [];
+    db.lowongan.forEach(l => {
+      const f = R.funnel(pelamar(l.id), l.tahapan).reduce((a, r) => a + r.menunggu, 0);
+      if (R.lewatMasaSimpan(l, hariIni())) out.push([l, 'Masa simpan data habis. Hapus data pelamarnya.']);
+      if (f) out.push([l, `${f} peserta menunggu keputusan.`]);
+      if (l.status === 'draf') out.push([l, 'Masih draf dan belum tampil di portal.']);
+      if (l.status === 'buka' && !(l.perusahaan && l.kontak && l.retensi)) out.push([l, 'Dibuka, tetapi info wajib belum lengkap sehingga formulir tertutup.']);
+    });
+    return out;
+  }
+
+  function dasborHtml() {
+    const ls = db.lowongan, ks = ls.flatMap(l => pelamar(l.id).map(k => [k, l]));
+    const st = ks.map(([k, l]) => R.progress(k, l.tahapan).state), n = s => st.filter(x => x === s).length;
+    const tahap = new Map();
+    ls.forEach(l => R.funnel(pelamar(l.id), l.tahapan).forEach(r => {
+      const x = tahap.get(r.tahap.nama) || { label: r.tahap.nama, n: 0, lolos: 0, tidak: 0, menunggu: 0 };
+      x.n += r.sampai; x.lolos += r.lolos; x.tidak += r.tidak; x.menunggu += r.menunggu;
+      tahap.set(r.tahap.nama, x);
+    }));
+    const saringan = [...tahap.values()].filter(x => x.n).map(x => ({ ...x, sub: `Lolos ${x.lolos} · Tidak ${x.tidak} · Menunggu ${x.menunggu}` }));
+    const rek = Object.keys(REC).map(k => ({ label: REC[k], n: ks.filter(([c, l]) => recOf(c, l) === k).length }));
+    const todo = tindakan();
+    return `<div class="stack"><div class="page-head"><h2>Dasbor rekrutmen</h2><button type="button" data-act="page" data-p="lowongan">Buat lowongan</button></div>
+      ${kpi('k6', [[ls.filter(l => l.status === 'buka').length, 'Lowongan dibuka'], [ls.filter(l => l.status === 'draf').length, 'Draf'], [ks.length, 'Total pelamar'], [n('proses'), 'Dalam proses'], [n('lolos'), 'Lolos semua tahap'], [ks.filter(([k]) => k.talentPool).length, 'Talent pool']])}
+      <div class="grid2"><section class="panel"><h3>Saringan rekrutmen</h3>${bars(saringan, 'Belum ada pelamar pada tahap mana pun.')}</section>
+      <section class="panel"><h3>Rekomendasi screening</h3>${bars(rek, 'Belum ada CV yang dinilai.')}</section></div>
+      <section class="panel"><h3>Perlu tindakan</h3>${todo.length ? `<ul class="rows">${todo.slice(0, 8).map(([l, t]) => `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${esc(t)}</span></button></li>`).join('')}</ul>${todo.length > 8 ? `<p class="note">Dan ${todo.length - 8} hal lainnya.</p>` : ''}` : '<p class="note">Tidak ada yang perlu ditindaklanjuti.</p>'}</section>
+      <section class="panel"><h3>Lowongan</h3>${ls.length ? `<ul class="rows">${ls.map(l => { const s = stat(l); return `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${s.total} pelamar · ${s.proses} proses · ${s.lolos} lolos · ${s.gugur} tidak lolos</span>${badgeL(l)}</button></li>`; }).join('')}</ul>` : '<p class="note">Belum ada lowongan.</p>'}</section></div>`;
+  }
+
+  function lowonganHtml() {
     const cards = db.lowongan.map(l => {
-      const list = pelamar(l.id), st = list.map(k => R.progress(k, l.tahapan).state);
-      const n = s => st.filter(x => x === s).length;
+      const s = stat(l);
       return `<div class="job-w"><button type="button" class="job" data-act="open" data-id="${esc(l.id)}">
-        <span class="job-head"><strong>${esc(l.judul)}</strong>${l.contoh ? '<span class="badge b-cek">Contoh</span>' : `<span class="badge ${l.status === 'buka' ? 'b-lolos' : 'b-none'}">${{ buka: 'Dibuka', tutup: 'Ditutup', draf: 'Draf' }[l.status] || 'Dibuka'}</span>`}</span>
+        <span class="job-head"><strong>${esc(l.judul)}</strong>${badgeL(l)}</span>
         ${R.lewatMasaSimpan(l, hariIni()) ? '<span class="badge b-tidak">Masa simpan habis, hapus datanya</span>' : ''}
         <small>${esc([l.perusahaan, l.lokasiKerja].filter(Boolean).join(' · ') || 'Lengkapi info lowongan')}${l.tenggat ? ` · Tenggat ${esc(R.tanggalId(l.tenggat))}` : ''}</small>
-        <span class="stats"><span><b>${list.length}</b> pelamar</span><span><b>${n('proses')}</b> dalam proses</span><span><b>${n('lolos')}</b> lolos</span><span><b>${n('gugur')}</b> tidak lolos</span></span>
+        <span class="stats"><span><b>${s.total}</b> pelamar</span><span><b>${s.proses}</b> dalam proses</span><span><b>${s.lolos}</b> lolos</span><span><b>${s.gugur}</b> tidak lolos</span></span>
       </button><button type="button" class="ghost danger job-del" data-act="del-job" data-id="${esc(l.id)}" aria-label="Hapus lowongan ${esc(l.judul)}">Hapus</button></div>`;
     }).join('');
-    const st = db.kandidat.map(k => { const l = db.lowongan.find(x => x.id === k.lowonganId); return l ? R.progress(k, l.tahapan).state : ''; });
-    return `<h2 class="page-title">Dasbor rekrutmen</h2>
-      <div class="kpi"><div><b>${db.lowongan.filter(l => l.status === 'buka').length}</b><span>Lowongan dibuka</span></div><div><b>${st.filter(Boolean).length}</b><span>Total pelamar</span></div><div><b>${st.filter(x => x === 'proses').length}</b><span>Dalam proses</span></div><div><b>${st.filter(x => x === 'lolos').length}</b><span>Lolos semua tahap</span></div></div>
+    return `<div class="stack"><h2>Lowongan</h2>
       <form class="new-job cta-form" data-form="new">
         <label for="new-judul">Tulis posisi yang dicari</label>
         <p class="note">Syarat dan ketentuan tersusun otomatis dari posisi ini, lalu Anda menambah atau mengurangi.</p>
         <div class="inline"><input id="new-judul" type="text" list="w-daftar" placeholder="Misalnya Senior Site Engineer" required><datalist id="w-daftar">${TL.SEMUA.map(t => `<option value="${esc(t.nama)}"></option>`).join('')}</datalist><button type="submit">Buat syarat otomatis</button><button type="button" class="ghost" data-act="sample">Buat contoh lowongan</button></div>
       </form>
-      <div class="jobs">${cards || '<div class="empty">Belum ada lowongan. Buat lowongan pertama di atas.</div>'}</div>`;
+      <div class="jobs">${cards || '<div class="empty">Belum ada lowongan. Tulis posisi di atas untuk memulai.</div>'}</div></div>`;
+  }
+
+  // ---- Talent pool: hanya pelamar yang menyetujui ----
+  const anggotaPool = () => db.kandidat.filter(k => k.talentPool && db.lowongan.some(l => l.id === k.lowonganId));
+
+  function poolHtml() {
+    const p = view.pool = view.pool || { q: '', lv: '', th: '', l: '' };
+    return `<div class="stack"><div class="page-head"><h2>Talent pool</h2><button type="button" class="ghost" data-act="pool-csv">Unduh CSV</button></div>
+      <p class="note">Berisi pelamar yang menyetujui ditawari lowongan lain. Masa simpan mengikuti persetujuan mereka, dan data terhapus bersama lowongan asalnya.</p>
+      <div id="pool-ring"></div>
+      <section class="panel"><h3>Cari dan cocokkan</h3><div class="filters4">
+        <div><label for="p-q">Kata kunci di CV</label><input id="p-q" type="search" value="${esc(p.q)}" data-pool="q" placeholder="AutoCAD, Teknik Sipil"></div>
+        <div><label for="p-lv">Pendidikan minimal</label><select id="p-lv" data-pool="lv"><option value="">Semua</option>${S.LEVELS.map(x => `<option value="${x.k}"${p.lv === x.k ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>
+        <div><label for="p-th">Pengalaman minimal (tahun)</label><input id="p-th" type="number" min="0" value="${esc(p.th)}" data-pool="th"></div>
+        <div><label for="p-l">Cocokkan dengan lowongan</label><select id="p-l" data-pool="l"><option value="">Tidak dicocokkan</option>${db.lowongan.map(l => `<option value="${esc(l.id)}"${p.l === l.id ? ' selected' : ''}>${esc(l.judul)}</option>`).join('')}</select></div>
+      </div></section>
+      <p id="copy-note" class="note" role="status" hidden></p>
+      <div id="pool-list" class="stack"></div></div>`;
+  }
+
+  function poolHasil() {
+    const p = view.pool, q = p.q.trim().toLowerCase(), need = S.levelOf(p.lv), th = +p.th || 0, target = db.lowongan.find(l => l.id === p.l);
+    const rows = anggotaPool().map(k => {
+      const f = factsOf(k) || { exp: { years: null } };
+      const skor = target ? resultOf(k, target) : null;
+      return { k, f, skor };
+    }).filter(({ k, f }) => {
+      const lvl = S.levelOf(f.level);
+      return (!q || String(k.text || '').toLowerCase().includes(q)) && (!need || (lvl && lvl.rank >= need.rank)) && (!th || (f.exp.years || 0) >= th);
+    });
+    if (target) rows.sort((a, b) => ((b.skor && b.skor.score) || 0) - ((a.skor && a.skor.score) || 0));
+    return rows;
+  }
+
+  function renderPool() {
+    const box = $('pool-list');
+    if (!box) return;
+    const semua = anggotaPool(), rows = poolHasil(), fs = semua.map(factsOf).filter(Boolean);
+    const lv = S.LEVELS.slice().reverse().map(x => ({ label: x.label, n: fs.filter(f => f.level === x.k).length }));
+    const band = [['0-2 tahun', 0, 2], ['3-5 tahun', 2.01, 5], ['6-10 tahun', 5.01, 10], ['Di atas 10 tahun', 10.01, 99]].map(([label, a, b]) => ({ label, n: fs.filter(f => f.exp.years !== null && f.exp.years >= a && f.exp.years <= b).length }));
+    const yrs = fs.map(f => f.exp.years).filter(y => y !== null);
+    $('pool-ring').innerHTML = `${kpi('k3', [[semua.length, 'Anggota talent pool'], [yrs.length ? S.idn(Math.round(yrs.reduce((a, b) => a + b, 0) / yrs.length * 10) / 10) : '-', 'Rata-rata pengalaman (tahun)'], [rows.length, 'Sesuai saringan']])}
+      <div class="grid2 mt"><section class="panel"><h3>Pendidikan</h3>${bars(lv, 'Belum ada anggota.')}</section><section class="panel"><h3>Pengalaman</h3>${bars(band, 'Belum ada anggota.')}</section></div>`;
+    box.innerHTML = rows.length ? rows.map(({ k, f, skor }) => {
+      const asal = db.lowongan.find(l => l.id === k.lowonganId), lvl = S.levelOf(f.level);
+      return `<article class="pool-row"><div class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)} · Melamar ${esc(asal.judul)} · ${esc(R.progressLabel(R.progress(k, asal.tahapan)))}</small><small>${esc([lvl && lvl.label, f.exp.years !== null && f.exp.years !== undefined ? `Sekitar ${S.idn(f.exp.years)} tahun` : ''].filter(Boolean).join(' · '))}</small></div>
+        ${skor && skor.rekomendasi ? `<div class="pool-skor"><b>${skor.score}</b><span class="badge b-${skor.rekomendasi}">${REC[skor.rekomendasi]}</span></div>` : ''}
+        <div class="inline">${f.email ? `<button type="button" class="ghost" data-act="pool-copy" data-v="${esc(f.email)}">Salin email</button>` : ''}<button type="button" class="ghost danger" data-act="pool-out" data-id="${esc(k.id)}">Keluarkan</button></div></article>`;
+    }).join('') : `<div class="empty">${semua.length ? 'Tidak ada anggota yang cocok dengan saringan ini.' : 'Belum ada pelamar yang menyetujui talent pool. Pilihan ini ada di formulir lamaran.'}</div>`;
+  }
+
+  function homeHtml() {
+    const page = view.page || 'dasbor';
+    return `<div class="shell"><aside class="side noprint"><nav class="tabs" aria-label="Menu HR">${HR_MENU.map(([k, label]) => `<button type="button" data-act="page" data-p="${k}"${page === k ? ' aria-current="page"' : ''}>${label}</button>`).join('')}</nav></aside>
+      <div id="tab-body">${({ dasbor: dasborHtml, lowongan: lowonganHtml, pool: poolHtml })[page]()}</div></div>`;
   }
 
   // ---- Halaman lowongan ----
   function detailHtml(l) {
     return `<div class="shell"><aside class="side noprint">
-      <button type="button" class="back" data-act="home">Semua lowongan</button>
+      <button type="button" class="back" data-act="home" data-p="lowongan">Semua lowongan</button>
       <div class="detail-head"><h2>${esc(l.judul)}</h2><span id="head-count" class="note">${pelamar(l.id).length} pelamar</span></div>
-      <nav class="tabs" aria-label="Bagian lowongan">${TABS.map(([k, label]) => `<button type="button" data-act="tab" data-tab="${k}"${view.tab === k ? ' aria-current="page"' : ''}>${label}</button>`).join('')}</nav>
-      <button type="button" class="ghost danger side-del" data-act="del-job" data-id="${esc(l.id)}">Hapus lowongan</button>
+      <nav class="tabs" aria-label="Bagian lowongan">${TABS.map(([k, label]) => `<button type="button" data-act="tab" data-tab="${k}"${view.tab === k ? ' aria-current="page"' : ''}>${label}</button>`).join('')}<button type="button" class="danger" data-act="del-job" data-id="${esc(l.id)}">Hapus lowongan</button></nav>
     </aside>
     <div id="tab-body">${({ ringkasan: ringkasanHtml, ketentuan: ketentuanHtml, kandidat: kandidatHtml, tahapan: tahapanHtml, pengumuman: pengumumanHtml })[view.tab](l)}</div></div>`;
   }
@@ -308,7 +412,7 @@
       .map(([k, label, n]) => `<button type="button" class="chip" data-act="filter" data-f="${k}" aria-pressed="${filter === k}">${esc(label)} (${n})</button>`).join('');
     const q = query.trim().toLowerCase();
     const shown = all.filter(k => (filter === 'semua' || recOf(k, l) === filter) &&
-      (!q || k.fileName.toLowerCase().includes(q) || k.nomor.toLowerCase().includes(q) || String(k.text || '').toLowerCase().includes(q)));
+      (!q || k.fileName.toLowerCase().includes(q) || String(k.nomor || '').toLowerCase().includes(q) || String(k.text || '').toLowerCase().includes(q)));
     if (!all.length) list.innerHTML = '<div class="empty">Belum ada CV. Isi ketentuan, lalu unggah file CV.</div>';
     else if (!shown.length) list.innerHTML = '<div class="empty">Tidak ada kandidat yang cocok dengan saringan ini.</div>';
     else list.innerHTML = shown.map((k, i) => cardHtml(k, i, l)).join('');
@@ -358,23 +462,13 @@
   }
 
   function ringkasanHtml(l) {
-    const list = pelamar(l.id), st = list.map(k => R.progress(k, l.tahapan).state);
-    const n = s => st.filter(x => x === s).length;
-    const hari = l.tahapan.reduce((a, t) => a + (+t.targetHari || 0), 0);
-    const f = R.funnel(list, l.tahapan), max = Math.max(list.length, 1);
+    const s = stat(l), hari = l.tahapan.reduce((a, t) => a + (+t.targetHari || 0), 0);
+    const f = R.funnel(s.list, l.tahapan).map(r => ({ label: r.tahap.nama, n: r.sampai, sub: `Lolos ${r.lolos} · Tidak ${r.tidak} · Menunggu ${r.menunggu}` }));
     return `<div class="stack">
-      <div class="kpi">
-        <div><b>${list.length}</b><span>Total pelamar</span></div>
-        <div><b>${n('proses')}</b><span>Dalam proses</span></div>
-        <div><b>${n('lolos')}</b><span>Lolos semua tahap</span></div>
-        <div><b>${n('gugur')}</b><span>Tidak lolos</span></div>
-        <div><b>${list.filter(k => k.talentPool).length}</b><span>Setuju talent pool</span></div>
-        <div><b>${hari}</b><span>Target hari seleksi</span></div>
-      </div>
-      <div class="two"><section class="panel"><h3>Kesiapan lowongan</h3>
-        <ul class="checks">${kesiapan(l).map(([t, ok]) => `<li><span class="mark m-${ok ? 'ok' : 'no'}">${ok ? 'Siap' : 'Belum'}</span><div>${esc(t)}</div></li>`).join('')}</ul></section>
-      <section class="stack"><h3>Saringan tahap</h3><div class="scroll"><table class="matrix funnel"><thead><tr><th scope="col">Tahap</th><th scope="col">Sampai</th><th scope="col">Lolos</th><th scope="col">Tidak</th><th scope="col">Menunggu</th><th scope="col">Porsi</th></tr></thead>
-        <tbody>${f.map(r => `<tr><th scope="row">${esc(r.tahap.nama)}</th><td>${r.sampai}</td><td>${r.lolos}</td><td>${r.tidak}</td><td>${r.menunggu}</td><td><progress max="${max}" value="${r.sampai}" aria-label="Porsi peserta di ${esc(r.tahap.nama)}"></progress></td></tr>`).join('')}</tbody></table></div></section></div>
+      ${kpi('k6', [[s.total, 'Total pelamar'], [s.proses, 'Dalam proses'], [s.lolos, 'Lolos semua tahap'], [s.gugur, 'Tidak lolos'], [s.list.filter(k => k.talentPool).length, 'Talent pool'], [hari, 'Target hari seleksi']])}
+      <div class="grid-side"><section class="panel"><h3>Saringan tahap</h3>${bars(f, '', true)}</section>
+      <section class="panel"><h3>Kesiapan lowongan</h3>
+        <ul class="ready">${kesiapan(l).map(([t, ok]) => `<li><span class="badge ${ok ? 'b-lolos' : 'b-tidak'}">${ok ? 'Siap' : 'Belum'}</span><span>${esc(t)}</span></li>`).join('')}</ul></section></div>
     </div>`;
   }
 
@@ -546,6 +640,7 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
+  const izinUnduh = () => window.confirm('File ini berisi data pribadi pelamar dan tidak terenkripsi. Simpan hanya di perangkat kerja dan hapus setelah selesai dipakai. Lanjutkan?');
   function csvCell(v) {
     let s = String(v === null || v === undefined ? '' : v);
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // isi CV tidak boleh terbaca sebagai rumus Excel
@@ -572,7 +667,7 @@
     if (wz) { app.innerHTML = wzDraftHtml(); document.title = 'Buat lowongan | Lowongan Kerja HR'; wzPreview(); return; }
     app.innerHTML = l ? detailHtml(l) : homeHtml();
     document.title = l ? `${l.judul} | Lowongan Kerja HR` : 'Lowongan Kerja HR';
-    if (!l) return;
+    if (!l) { renderPool(); return; }
     if (view.tab === 'kandidat') { bindDrop(); renderList(l); }
     if (view.tab === 'ketentuan') updateWarning(l);
     if (view.tab === 'pengumuman') renderAnnounce(l);
@@ -709,6 +804,7 @@
       return;
     }
     if (el.id === 'search' && l) { query = el.value; renderList(l); return; }
+    if (d.pool) { view.pool[d.pool] = el.value; renderPool(); return; }
     if (!l) return;
     const val = el.type === 'checkbox' ? el.checked : el.value;
     if (d.l) { l[d.l] = val; if (d.l === 'judul') app.querySelector('.detail-head h2').textContent = val; }
@@ -725,7 +821,21 @@
   }
 
   const ACTIONS = {
-    home() { view = { id: null, tab: 'kandidat', tahapId: null }; render(); },
+    home(el) { view = { id: null, tab: 'kandidat', tahapId: null, page: el.dataset.p || 'dasbor', pool: view.pool }; wz = null; render(); },
+    page(el) { view.page = el.dataset.p; render(); },
+    'pool-copy'(el) { copyText(el.dataset.v, 'Email tersalin.'); },
+    'pool-out'(el) {
+      const k = db.kandidat.find(x => x.id === el.dataset.id);
+      if (!k || !window.confirm(`Keluarkan ${namaOf(k)} dari talent pool?`)) return;
+      k.talentPool = false;
+      save(); renderPool();
+    },
+    'pool-csv'() {
+      if (!izinUnduh()) return;
+      const head = ['Nomor', 'Nama', 'Email', 'Telepon', 'Pendidikan', 'Pengalaman (tahun)', 'Lowongan asal'];
+      const rows = poolHasil().map(({ k, f }) => { const lvl = S.levelOf(f.level), asal = db.lowongan.find(l => l.id === k.lowonganId); return [k.nomor, namaOf(k), f.email, f.phone, lvl ? lvl.label : '', f.exp.years === null || f.exp.years === undefined ? '' : S.idn(f.exp.years), asal ? asal.judul : '']; });
+      download(`talent-pool-${hariIni()}.csv`, '\ufeff' + [head].concat(rows).map(r => r.map(csvCell).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
+    },
     open(el) { view = { id: el.dataset.id, tab: 'ringkasan', tahapId: null }; filter = 'semua'; query = ''; render(); },
     tab(el) { view.tab = el.dataset.tab; render(); },
     filter(el) { filter = el.dataset.f; renderList(current()); },
@@ -765,7 +875,7 @@
       if (!window.confirm(`Hapus lowongan "${l.judul}" beserta ${pelamar(l.id).length} data pelamarnya? Tindakan ini tidak bisa dibatalkan.`)) return;
       db.kandidat = db.kandidat.filter(k => k.lowonganId !== l.id);
       db.lowongan = db.lowongan.filter(x => x.id !== l.id);
-      view.id = null; save(); render();
+      view.id = null; view.page = 'lowongan'; save(); render();
     },
     rm(el) {
       const l = current(), k = db.kandidat.find(x => x.id === el.dataset.id);
@@ -776,7 +886,7 @@
       save(); renderList(l);
       $('head-count').textContent = `${pelamar(l.id).length} pelamar`;
     },
-    csv() { downloadCsv(current()); },
+    csv() { if (izinUnduh()) downloadCsv(current()); },
     mark(el) {
       const l = current(), k = db.kandidat.find(x => x.id === el.dataset.k);
       if (k && R.setTahap(k, l.tahapan, el.dataset.t, el.dataset.v)) { catatKeputusan(k, l, el.dataset.t); save(); $('matrix').innerHTML = stageView(l); }
@@ -801,6 +911,7 @@
     async publish() {
       const l = current(), o = pengumumanState(l), i = l.tahapan.findIndex(t => t.id === view.tahapId), tahap = l.tahapan[i];
       const g = R.groupsAt(pelamar(l.id), l.tahapan, i);
+      if (l.status === 'draf') { showBanner('Lowongan masih draf. Ubah statusnya di tab Ketentuan sebelum menerbitkan hasil.'); return; }
       if (!g.lolos.length && !g.tidak.length) { showBanner('Belum ada peserta yang diputuskan pada tahap ini.'); return; }
       const sisa = g.belum.length ? ` ${g.belum.length} peserta yang belum diputuskan tidak ikut diumumkan.` : '';
       if (!window.confirm(`Terbitkan hasil ${tahap.nama}: ${g.lolos.length} lolos dan ${g.tidak.length} tidak lolos? Pelamar akan langsung bisa melihatnya.${sisa}`)) return;
@@ -818,14 +929,23 @@
       }
     },
     async refresh() {
-      try { await reloadCloud(); } catch (e) { showBanner('Gagal memuat data dari server.'); }
+      try { await muatBaru(); } catch (e) { showBanner('Gagal memuat data dari server.'); }
     },
     async login() {
       try { await C.signIn(); showBanner(''); await bootCloud(); } catch (e) {
         showBanner(e && e.code === 'auth/popup-blocked' ? 'Jendela login diblokir browser. Izinkan popup untuk situs ini, lalu coba lagi.' : 'Gagal masuk. Coba lagi.');
       }
     },
-    async logout() { await C.signOut(); window.location.reload(); },
+    async logout() {
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        if ((await flush()) === false && !window.confirm('Ada perubahan yang belum tersimpan ke server. Tetap keluar?')) return;
+        clearTimeout(saveTimer);
+      }
+      wz = null; saveTimer = null;
+      await C.signOut();
+      window.location.reload();
+    },
     'copy-ann'() {
       const l = current(), o = pengumumanState(l), i = l.tahapan.findIndex(t => t.id === view.tahapId);
       copyText(R.announcementText(l, l.tahapan[i], R.groupsAt(pelamar(l.id), l.tahapan, i), o, namaOf), 'Teks pengumuman tersalin.');
@@ -885,9 +1005,44 @@
       if ((await flush()) === false) return; // jangan menimpa perubahan yang belum tersimpan
     }
     db = await C.loadAll();
+    db.lowongan = lengkapi(db.lowongan);
     factsCache.clear();
     remember(R.docsFromDb(db));
-    // Lamaran dari portal belum bernomor; nomor diberikan di sini agar pelamar bisa melihatnya.
+    await beriNomor();
+    render();
+    cekMasaSimpan();
+  }
+
+  // Satu dokumen HR yang hilang tidak boleh membuat seluruh halaman gagal dimuat.
+  function lengkapi(lowongan) {
+    const ada = lowongan.filter(l => l.judul);
+    ada.forEach(l => { l.criteria = l.criteria || S.defaultCriteria(); l.tahapan = l.tahapan || R.newTahapan(); });
+    return ada;
+  }
+
+  // Lowongan diambil utuh karena kecil; lamaran hanya yang baru atau diubah HR lain, bukan seluruh CV.
+  async function muatBaru() {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      if ((await flush()) === false) return;
+    }
+    const sejak = Math.max(0, ...db.kandidat.map(k => k.dibuatMs || 0));
+    const sejakUbah = Math.max(0, ...db.kandidat.map(k => k.diubahMs || 0));
+    const [lowongan, masuk, ubah] = await Promise.all([C.muatLowongan(), C.newLamaran(sejak), C.ubahLamaran(sejakUbah)]);
+    db.lowongan = lengkapi(lowongan);
+    const baru = masuk.filter(k => !db.kandidat.some(x => x.id === k.id));
+    db.kandidat.push(...baru);
+    ubah.forEach(u => { const k = db.kandidat.find(x => x.id === u.id); if (k) Object.assign(k, u); else if (u.lowonganId) db.kandidat.push(u); });
+    db.kandidat = db.kandidat.filter(k => db.lowongan.some(l => l.id === k.lowonganId));
+    if (view.id && !current()) view = { id: null, tab: 'kandidat', tahapId: null };
+    remember(R.docsFromDb(db));
+    await beriNomor();
+    render();
+    setSync(baru.length ? `${baru.length} lamaran baru` : 'Data terbaru dimuat');
+  }
+
+  // Lamaran dari portal belum bernomor; nomor diberikan di sini agar pelamar bisa melihatnya.
+  async function beriNomor() {
     const fresh = [];
     for (const l of db.lowongan) {
       const baru = db.kandidat.filter(k => !k.nomor && k.lowonganId === l.id);
@@ -896,8 +1051,24 @@
       baru.forEach(k => { k.nomor = R.nextNomor(l); fresh.push(R.hasilAwal(k, l)); });
     }
     if (fresh.length) { await C.apply(fresh, []); await syncCloud(); }
-    render();
-    cekMasaSimpan();
+  }
+
+  // Keluar otomatis setelah 30 menit tanpa aktivitas, agar data pelamar tidak terbuka di meja kosong.
+  const BATAS_DIAM = 30 * 60 * 1000;
+  function jagaSesi() {
+    let t = null;
+    const ulang = (ms = BATAS_DIAM) => { clearTimeout(t); t = setTimeout(keluarOtomatis, ms); };
+    async function keluarOtomatis() {
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        if ((await flush()) === false) { ulang(60000); return; } // perubahan jangan hilang: coba lagi semenit kemudian
+      }
+      wz = null;
+      await C.signOut();
+      window.location.reload();
+    }
+    ['pointerdown', 'keydown', 'scroll'].forEach(n => document.addEventListener(n, () => ulang(), { passive: true }));
+    ulang();
   }
 
   async function bootCloud() {
@@ -916,6 +1087,7 @@
       return;
     }
     $('btn-refresh').hidden = false;
+    jagaSesi();
     try { await reloadCloud(); } catch (e) { app.innerHTML = '<div class="empty">Gagal memuat data dari server.</div>'; }
   }
 
@@ -953,6 +1125,7 @@
     if (!el || !ACTIONS[el.dataset.act]) return;
     if (el.dataset.act.startsWith('stage-')) view.atur = true; // panel tetap terbuka setelah digambar ulang
     ACTIONS[el.dataset.act](el);
+    if (['tab', 'page', 'open', 'home'].includes(el.dataset.act)) app.focus({ preventScroll: true }); // pembaca layar ikut pindah
   });
   app.addEventListener('input', onInput);
   app.addEventListener('change', onInput);

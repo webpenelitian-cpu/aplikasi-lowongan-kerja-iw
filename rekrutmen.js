@@ -201,7 +201,7 @@
         lowonganId: k.lowonganId, nomor: k.nomor || '', fileName: k.fileName || '', size: k.size || 0, error: k.error || '',
         cvText: k.text === undefined ? null : k.text, tahap: k.tahap || {},
         nama: k.nama || '', email: k.email || '', telepon: k.telepon || '',
-        catatan: k.catatan || '', jejak: k.jejak || [],
+        catatan: k.catatan || '', jejak: k.jejak || [], talentPool: !!k.talentPool,
       }));
     });
     return out;

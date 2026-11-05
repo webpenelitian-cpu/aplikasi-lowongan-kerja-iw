@@ -90,18 +90,34 @@
 
   // ---- Aplikasi HR ----
   async function loadAll() {
-    const [pub, hr, lam] = await Promise.all(['lowongan', 'lowongan_hr', 'lamaran'].map(c => F.getDocs(F.collection(db, c))));
+    const [lowongan, lam] = await Promise.all([muatLowongan(), F.getDocs(F.collection(db, 'lamaran'))]);
+    return { lowongan, kandidat: rows(lam).map(lamaranKe) };
+  }
+
+  async function muatLowongan() {
+    const [pub, hr] = await Promise.all(['lowongan', 'lowongan_hr'].map(c => F.getDocs(F.collection(db, c))));
     const hrById = new Map(rows(hr).map(x => [x.id, x]));
-    return {
-      lowongan: rows(pub).map(l => {
-        const { tutupPada, ...rest } = l;
-        return { ...rest, ...(hrById.get(l.id) || {}) };
-      }),
-      kandidat: rows(lam).map(k => {
-        const { cvText, dibuat, persetujuan, ...rest } = k;
-        return { tahap: {}, error: '', ...rest, text: cvText === undefined ? null : cvText };
-      }),
-    };
+    return rows(pub).map(l => {
+      const { tutupPada, ...rest } = l;
+      return { ...rest, ...(hrById.get(l.id) || {}) };
+    });
+  }
+
+  function lamaranKe(k) {
+    const { cvText, dibuat, diubah, persetujuan, ...rest } = k;
+    return { tahap: {}, error: '', ...rest, text: cvText === undefined ? null : cvText, dibuatMs: dibuat && dibuat.toMillis ? dibuat.toMillis() : 0, diubahMs: diubah && diubah.toMillis ? diubah.toMillis() : 0 };
+  }
+
+  // Lamaran setelah waktu tertentu saja: hemat kuota baca dan unduhan.
+  async function newLamaran(sejakMs) {
+    const q = F.query(F.collection(db, 'lamaran'), F.where('dibuat', '>', F.Timestamp.fromMillis(sejakMs)));
+    return rows(await F.getDocs(q)).map(lamaranKe);
+  }
+
+  // Lamaran yang diubah akun HR lain setelah waktu tertentu.
+  async function ubahLamaran(sejakMs) {
+    const q = F.query(F.collection(db, 'lamaran'), F.where('diubah', '>', F.Timestamp.fromMillis(sejakMs)));
+    return rows(await F.getDocs(q)).map(lamaranKe);
   }
 
   // sets: daftar [jalur, data]. Hanya kolom yang dikirim yang diganti, jadi waktu kirim dan persetujuan pelamar tetap utuh.
@@ -114,11 +130,12 @@
         if (kind === 'del') { batch.delete(ref); return; }
         const data = { ...v };
         if (data.tutupPada) data.tutupPada = new Date(data.tutupPada);
+        if (p.startsWith('lamaran/')) data.diubah = F.serverTimestamp();
         batch.set(ref, data, { mergeFields: Object.keys(data) });
       });
       await batch.commit();
     }
   }
 
-  root.Cloud = { email, reserveNomor, enabled, initHr, signIn, signOut, isAdmin, listLowongan, getLowongan, listPengumuman, submitLamaran, getHasil, loadAll, apply };
+  root.Cloud = { newLamaran, ubahLamaran, muatLowongan, email, reserveNomor, enabled, initHr, signIn, signOut, isAdmin, listLowongan, getLowongan, listPengumuman, submitLamaran, getHasil, loadAll, apply };
 })(window);
