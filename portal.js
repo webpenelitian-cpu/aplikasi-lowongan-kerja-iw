@@ -19,7 +19,10 @@
 
   const inisial = s => (String(s || '').replace(/\b(PT|CV|Tbk)\b\.?/gi, '').match(/[\p{L}\p{N}]+/gu) || ['L']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
   const logo = l => `<span class="logo" aria-hidden="true">${esc(inisial(l.perusahaan || l.judul))}</span>`;
-  const cuplikan = s => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > 130 ? `${t.slice(0, 130).replace(/\s\S*$/, '')}...` : t; };
+  const cuplikan = s => {
+    const t = String(s || '').split('\n').map(x => x.replace(/^\s*[-•*]\s*/, '').trim()).filter(x => x && !x.endsWith(':')).join('. ').replace(/\.\. /g, '. ');
+    return t.length > 170 ? `${t.slice(0, 170).replace(/\s\S*$/, '')}...` : t;
+  };
 
   let semua = [], dimuat = 0;
   const saring = { q: '', lok: '', status: 'semua' };
@@ -29,8 +32,7 @@
     const foot = l.contoh ? 'Lowongan contoh' : dibuka(l) ? (l.tenggat ? `Melamar sampai ${R.tanggalId(l.tenggat)}` : 'Menerima lamaran') : 'Pendaftaran ditutup';
     return `<a class="job" href="#/l/${esc(l.id)}">${logo(l)}<span class="job-body">
       <span class="job-head"><strong>${esc(l.judul)}</strong>${badgeOf(l)}</span>
-      <span class="job-co">${esc(l.perusahaan)}</span>
-      <small>${esc(l.lokasiKerja)}</small>
+      <span class="job-co">${esc([l.perusahaan, l.lokasiKerja].filter(Boolean).join(' · '))}</span>
       ${l.deskripsi ? `<span class="job-sn">${esc(cuplikan(l.deskripsi))}</span>` : ''}
       <small class="job-ft">${esc(foot)}</small></span></a>`;
   }
@@ -54,12 +56,13 @@
     semua = semua.filter(l => l.status !== 'draf').sort((a, b) => dibuka(b) - dibuka(a) || a.judul.localeCompare(b.judul));
     const lok = document.getElementById('lok'), pilih = saring.lok;
     lok.innerHTML = '<option value="">Semua lokasi</option>' + [...new Set(semua.map(l => l.lokasiKerja).filter(Boolean))].sort().map(x => `<option${x === pilih ? ' selected' : ''}>${esc(x)}</option>`).join('');
-    app.innerHTML = `<div class="result-head"><h2 id="jumlah" role="status"></h2></div><div id="hasil" class="results"></div>
-      <div class="trust">
+    app.innerHTML = `<div class="beranda"><section aria-labelledby="jumlah"><div class="result-head"><h2 id="jumlah" role="status"></h2><div id="chips" class="chips" role="group" aria-label="Saring status lowongan"></div></div><div id="hasil" class="results"></div></section>
+      <aside class="trust" aria-label="Informasi pelamar">
         <div><strong>Tanpa biaya</strong>Melamar dan mengikuti seleksi tidak dipungut biaya.</div>
         <div><strong>Kesempatan setara</strong>Penilaian berdasarkan kemampuan yang dibutuhkan pekerjaan.</div>
         <div><strong>Hasil transparan</strong>Pantau hasil tiap tahap dengan kode lamaran Anda.</div>
-      </div>`;
+        <a class="linkbtn" href="#/cek">Cek hasil seleksi</a>
+      </aside></div>`;
     daftar();
   }
 
@@ -246,7 +249,13 @@
   document.getElementById('cari').addEventListener('submit', e => { e.preventDefault(); saring.q = document.getElementById('q').value.trim(); daftar(); });
   document.getElementById('q').addEventListener('input', e => { saring.q = e.target.value.trim(); daftar(); });
   document.getElementById('lok').addEventListener('change', e => { saring.lok = e.target.value; daftar(); });
-  document.getElementById('chips').addEventListener('click', e => { const k = e.target.dataset.s; if (k) { saring.status = k; daftar(); } });
+  app.addEventListener('click', e => {
+    const c = e.target.closest('#chips [data-s]');
+    if (!c) return;
+    saring.status = c.dataset.s;
+    daftar();
+    document.querySelector(`#chips [data-s="${saring.status}"]`).focus(); // fokus papan ketik tidak hilang
+  });
   window.addEventListener('hashchange', route);
   route();
 })();
