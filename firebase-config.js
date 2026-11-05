@@ -6,5 +6,5 @@ window.FIREBASE_CONFIG = {
   authDomain: 'aplikasi-web-lowongan-kerja-iw.firebaseapp.com',
   projectId: 'aplikasi-web-lowongan-kerja-iw',
   appId: '1:451297326014:web:d959242158663aa86d3fef',
-  recaptchaSiteKey: '', // kunci situs reCAPTCHA Enterprise untuk App Check (publik)
+  recaptchaSiteKey: '6LfydhEuAAAAACn7DJfj1dCByNkLDfu-eaJhKk9g', // kunci situs reCAPTCHA Enterprise untuk App Check (publik)
 };

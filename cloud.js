@@ -15,7 +15,7 @@
     // CAPTCHA tanpa teka-teki: tiap permintaan membawa token reCAPTCHA yang diperiksa Firebase.
     if (cfg.recaptchaSiteKey) {
       const ac = await import(`${SDK}/firebase-app-check.js`);
-      ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(cfg.recaptchaSiteKey), isTokenAutoRefreshEnabled: true });
+      ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(cfg.recaptchaSiteKey), isTokenAutoRefreshEnabled: false }); // token diambil saat dibutuhkan, agar tetap di kuota gratis
     }
     db = F.getFirestore(app);
   }
