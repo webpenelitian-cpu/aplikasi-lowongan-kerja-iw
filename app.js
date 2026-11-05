@@ -98,7 +98,17 @@
       })
       : writeDb().then(() => setSync('Tersimpan')).catch(() => { setSync('Belum tersimpan'); showBanner('Data gagal tersimpan di browser ini. Unduh cadangan agar pekerjaan tidak hilang.'); });
   };
-  const setSync = text => { const s = $('sync'); if (s) s.textContent = text; };
+  // Status tampil sebagai lencana di samping posisi; #sync tetap menjadi pengumuman untuk pembaca layar.
+  let statusSimpan = 'Tersimpan';
+  const jenisSimpan = t => (/^Menyimpan/.test(t) ? 'jalan' : /^Belum/.test(t) ? 'gagal' : 'ok');
+  const setSync = text => {
+    statusSimpan = text;
+    const s = $('sync'), p = $('simpan');
+    if (s) s.textContent = text;
+    if (p) { p.dataset.s = jenisSimpan(text); p.textContent = text.split(',')[0]; }
+    // Kabar sekali lewat tidak menetap, lencana kembali ke keadaan sebenarnya.
+    if (jenisSimpan(text) === 'ok' && text !== 'Tersimpan') setTimeout(() => { if (statusSimpan === text) setSync('Tersimpan'); }, 3000);
+  };
   function save() {
     clearTimeout(saveTimer);
     setSync('Menyimpan...');
@@ -267,7 +277,7 @@
   function detailHtml(l) {
     return `<div class="shell"><aside class="side noprint">
       <button type="button" class="back" data-act="home" data-p="lowongan">Semua lowongan</button>
-      <div class="detail-head"><h2>${esc(l.judul)}</h2><span id="head-count" class="note">${pelamar(l.id).length} pelamar</span></div>
+      <div class="detail-head"><div class="detail-top"><h2>${esc(l.judul)}</h2><span id="simpan" class="simpan" data-s="${jenisSimpan(statusSimpan)}" aria-hidden="true">${esc(statusSimpan.split(',')[0])}</span></div><span id="head-count" class="note">${pelamar(l.id).length} pelamar</span></div>
       <nav class="tabs" aria-label="Bagian lowongan">${TABS.map(([k, label]) => `<button type="button" data-act="tab" data-tab="${k}"${view.tab === k ? ' aria-current="page"' : ''}>${label}</button>`).join('')}<button type="button" class="danger" data-act="del-job" data-id="${esc(l.id)}">Hapus lowongan</button></nav>
     </aside>
     <div id="tab-body">${({ ringkasan: ringkasanHtml, ketentuan: ketentuanHtml, kandidat: kandidatHtml, tahapan: tahapanHtml, pengumuman: pengumumanHtml })[view.tab](l)}</div></div>`;
@@ -664,6 +674,7 @@
   function render() {
     const l = current();
     if (!l) view.id = null;
+    document.body.classList.toggle('pos', !!l && !wz);
     if (wz) { app.innerHTML = wzDraftHtml(); document.title = 'Buat lowongan | Lowongan Kerja HR'; wzPreview(); return; }
     app.innerHTML = l ? detailHtml(l) : homeHtml();
     document.title = l ? `${l.judul} | Lowongan Kerja HR` : 'Lowongan Kerja HR';
