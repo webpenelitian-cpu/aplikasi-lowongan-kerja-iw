@@ -43,7 +43,7 @@
       && (!saring.lok || l.lokasiKerja === saring.lok)
       && (saring.status === 'semua' || (saring.status === 'buka') === dibuka(l)));
     document.getElementById('jumlah').textContent = `${list.length} lowongan`;
-    box.innerHTML = list.length ? list.map(kartu).join('') : '<div class="empty">Tidak ada lowongan yang cocok dengan pencarian ini.</div>';
+    box.innerHTML = list.length ? list.map(kartu).join('') : `<div class="empty">${semua.length ? 'Tidak ada lowongan yang cocok dengan pencarian ini.' : 'Belum ada lowongan yang dibuka saat ini.'}</div>`;
     document.getElementById('chips').innerHTML = STATUS.map(([k, v]) => `<button type="button" class="chip" data-s="${k}" aria-pressed="${saring.status === k}">${v}</button>`).join('');
   }
 
