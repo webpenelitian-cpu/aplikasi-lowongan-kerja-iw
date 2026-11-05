@@ -71,7 +71,7 @@
     return `<details class="panel"><summary>Hasil ${esc(p.tahap)}${p.tanggal ? ` (${esc(R.tanggalId(p.tanggal))})` : ''}</summary>
       <h4 class="pass">Dinyatakan lolos (${p.lolos.length} peserta)</h4>${list(p.lolos)}
       <h4 class="fail">Tidak lolos (${p.tidak.length} peserta)</h4>${list(p.tidak)}
-      ${p.tindak ? `<h4>Tindak lanjut</h4><p class="pre">${esc(p.tindak)}</p>` : ''}</details>`;
+    </details>`;
   }
 
   function alurHtml(l) {
@@ -190,18 +190,29 @@
   function cek() {
     setTitle('Cek hasil');
     app.innerHTML = `<form id="cek" class="panel narrow" novalidate><h2>Cek hasil seleksi</h2>
-      <div class="field"><label for="c-kode">Kode lamaran</label><input id="c-kode" type="text" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-IJKL-MNOP"></div>
+      <div class="field"><label for="c-kode">Kode lamaran</label><input id="c-kode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" placeholder="ABCD-EFGH-IJKL-MNOP"></div>
       <button type="submit" class="start">Cek hasil</button>
-      <p class="hint">Kehilangan kode? Hubungi kontak HR pada lowongan yang Anda lamar.</p></form><div id="c-out" class="narrow stack" role="status"></div>`;
-    document.getElementById('cek').addEventListener('submit', async e => {
+      <p class="hint">Kehilangan kode? Hubungi kontak HR pada lowongan yang Anda lamar.</p></form><div id="c-out" class="hasil-wrap" role="status"></div>`;
+    const form = document.getElementById('cek'), out = document.getElementById('c-out'), input = document.getElementById('c-kode'), btn = form.querySelector('button');
+    form.addEventListener('submit', async e => {
       e.preventDefault();
-      const out = document.getElementById('c-out'), kode = R.normalKode(document.getElementById('c-kode').value);
-      if (kode.length !== 16) { out.innerHTML = '<p class="warn">Kode terdiri dari 16 huruf dan angka. Periksa kembali.</p>'; return; }
-      out.innerHTML = '<p class="note">Memeriksa...</p>';
+      const kode = R.normalKode(input.value);
+      if (kode.length !== 16) { out.innerHTML = '<p class="warn narrow">Kode terdiri dari 16 huruf dan angka. Periksa kembali.</p>'; return; }
+      out.innerHTML = '<p class="note narrow">Memeriksa...</p>';
+      btn.disabled = true;
       try {
         const h = await C.getHasil(kode);
-        out.innerHTML = h ? hasilHtml(h) : '<p class="warn">Belum ada data untuk kode ini. Bila Anda baru melamar, lamaran mungkin belum diproses. Periksa juga penulisan kode.</p>';
-      } catch (err) { out.innerHTML = `<p class="warn">${NET_ERROR}</p>`; }
+        if (!h) { out.innerHTML = '<p class="warn narrow">Belum ada data untuk kode ini. Bila Anda baru melamar, lamaran mungkin belum diproses. Periksa juga penulisan kode.</p>'; return; }
+        // Kode ditutup dari layar supaya tidak ikut terlihat atau tertangkap layar bersama hasilnya.
+        input.value = ''; form.hidden = true; out.removeAttribute('role');
+        out.innerHTML = hasilHtml(h);
+        const hasil = out.querySelector('.hasil');
+        hasil.focus({ preventScroll: true });
+        window.scrollTo(0, 0);
+        document.getElementById('c-lagi').addEventListener('click', () => {
+          out.innerHTML = ''; out.setAttribute('role', 'status'); form.hidden = false; input.focus();
+        });
+      } catch (err) { out.innerHTML = `<p class="warn narrow">${NET_ERROR}</p>`; } finally { btn.disabled = false; }
     });
   }
 
@@ -218,15 +229,44 @@
     </section>`;
   }
 
+  // Hanya alamat https yang menjadi tautan; teks lain tetap teks biasa.
+  function tautan(s) {
+    return String(s === null || s === undefined ? '' : s).split(/(https:\/\/[^\s<>"']+)/).map((p, i) => {
+      if (i % 2 === 0) return esc(p);
+      const url = p.replace(/[.,;:!?)]+$/, ''), sisa = p.slice(url.length);
+      let host = '';
+      try { host = new URL(url).hostname; } catch (e) { return esc(p); }
+      const peta = /(^|\.)maps\.app\.goo\.gl$|^maps\.google\.|^(www\.)?google\.[a-z.]+$/.test(host) && /maps/.test(url);
+      return `<a class="${peta ? 'linkbtn' : ''}" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${peta ? 'Buka lokasi di Google Maps' : esc(url)}</a>${peta ? '' : esc(sisa)}`;
+    }).join('');
+  }
+
   function hasilHtml(h) {
-    const line = { lolos: 'Lolos', tidak: 'Tidak lolos' };
-    const head = h.status === 'tidak'
-      ? `<p class="status fail">Mohon maaf, Anda belum dapat melanjutkan setelah tahap ${esc(h.tahap)}.</p><p>Terima kasih atas waktu dan minat Anda.</p>`
-      : h.status === 'lolos' ? `<p class="status pass">Selamat, Anda lolos tahap ${esc(h.tahap)}.</p>`
-        : '<p class="status">Lamaran Anda sudah diterima dan sedang diproses.</p>';
-    return `<section class="panel"><h3>${esc(h.posisi)}</h3><p class="note">${esc(h.perusahaan)} · Nomor peserta ${esc(h.nomor)}</p>${head}
-      ${h.pesan ? `<h4>Tindak lanjut</h4><p class="pre">${esc(h.pesan)}</p>` : ''}
-      ${(h.riwayat || []).length ? `<ul class="riwayat">${h.riwayat.map(r => `<li><span>${esc(r.nama)}</span><span class="badge b-${r.status === 'lolos' ? 'lolos' : 'tidak'}">${line[r.status] || ''}</span></li>`).join('')}</ul>` : ''}</section>`;
+    const riwayat = h.riwayat || [], alur = (h.alur || []).length ? h.alur : riwayat.map(r => r.nama);
+    const lengkap = !!(h.alur || []).length, n = riwayat.length;
+    const lolos = riwayat.filter(r => r.status === 'lolos').length;
+    const akhir = h.status === 'lolos' && lengkap && n === alur.length, berikut = h.status === 'lolos' && lengkap ? alur[n] : '';
+    const kepala = h.status === 'tidak'
+      ? ['Belum dapat melanjutkan', `Proses seleksi Anda berhenti pada tahap ${esc(h.tahap)}. Terima kasih atas waktu dan minat Anda.`]
+      : akhir ? ['Selamat, Anda lolos seluruh tahap seleksi', 'Ikuti tindak lanjut dari tim HR di bawah ini.']
+        : h.status === 'lolos' ? [`Selamat, Anda lolos tahap ${esc(h.tahap)}`, berikut ? `Tahap berikutnya: ${esc(berikut)}.` : '']
+          : ['Lamaran sedang diproses', 'Lamaran Anda sudah kami terima. Hasil tiap tahap akan tampil di halaman ini.'];
+    const jenis = h.status === 'tidak' ? 'tidak' : h.status === 'lolos' ? 'lolos' : 'proses';
+    const tampil = h.status === 'tidak' ? alur.slice(0, n) : alur;
+    const label = { lolos: 'Lolos', tidak: 'Tidak lolos', kini: 'Berlangsung', nanti: '' };
+    const langkah = tampil.map((nama, i) => {
+      const s = (riwayat[i] || {}).status;
+      const k = s === 'lolos' || s === 'tidak' ? s : i === n && h.status !== 'tidak' ? 'kini' : 'nanti';
+      return `<li data-s="${k}"><span class="nama">${esc(nama)}</span><span class="ket">${label[k]}</span></li>`;
+    }).join('');
+    return `<section class="hasil" tabindex="-1">
+      <header class="hasil-top"><p class="eyebrow">Hasil seleksi</p><h2>${esc(h.posisi)}</h2>
+        <p class="note">${esc([h.perusahaan, `Nomor peserta ${h.nomor}`].filter(Boolean).join(' · '))}${h.tanggal ? ` · Diperbarui ${esc(R.tanggalId(h.tanggal))}` : ''}</p></header>
+      <div class="hasil-status" data-s="${jenis}"><span class="ikon" aria-hidden="true"></span><div><h3>${kepala[0]}</h3>${kepala[1] ? `<p>${kepala[1]}</p>` : ''}</div></div>
+      ${h.pesan ? `<div class="hasil-tindak"><h3>Tindak lanjut</h3><p class="pre">${tautan(h.pesan)}</p></div>` : ''}
+      ${langkah ? `<div class="hasil-alur"><div class="hasil-alur-top"><h3>Perjalanan seleksi</h3>${lengkap ? `<span class="note">${lolos} dari ${alur.length} tahap</span>` : ''}</div><ol class="linimasa">${langkah}</ol></div>` : ''}
+      <div class="hasil-kaki"><button type="button" class="ghost" id="c-lagi">Cek kode lain</button><p class="hint">Simpan kode lamaran Anda dan jangan bagikan kepada orang lain.</p></div>
+    </section>`;
   }
 
   async function route() {

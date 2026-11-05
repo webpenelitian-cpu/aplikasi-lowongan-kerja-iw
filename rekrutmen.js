@@ -152,7 +152,8 @@
     const terbit = { ...(l.terbit || {}), [tahap.id]: true };
     const tindakOf = t => (t.id === tahap.id ? opts.tindak : ((l.pengumuman || {})[t.id] || {}).tindak) || '';
     const sets = [[`pengumuman/${l.id}__${tahap.id}`, {
-      lowonganId: l.id, tahap: tahap.nama, urutan: index, tanggal: opts.tanggal || '', tindak: opts.tindak || '',
+      // tindak dikosongkan: lokasi dan kontak hanya untuk peserta yang lolos, lewat dokumen hasil yang dibuka dengan kode.
+      lowonganId: l.id, tahap: tahap.nama, urutan: index, tanggal: opts.tanggal || '', tindak: '',
       lolos: g.lolos.map(k => k.nomor), tidak: g.tidak.map(k => k.nomor),
     }]];
     list.forEach(k => {
@@ -163,6 +164,7 @@
       sets.push([`hasil/${k.id}`, {
         nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', status, tahap: t.nama,
         riwayat: l.tahapan.slice(0, last + 1).map(x => ({ nama: x.nama, status: statusOf(k, x) })),
+        alur: l.tahapan.map(x => x.nama), tanggal: opts.tanggal || '',
         pesan: status === 'lolos' ? tindakOf(t) : '',
       }]);
     });
@@ -177,7 +179,7 @@
     });
   }
 
-  const hasilAwal = (k, l) => [`hasil/${k.id}`, { nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', status: 'proses', tahap: '', riwayat: [], pesan: '' }];
+  const hasilAwal = (k, l) => [`hasil/${k.id}`, { nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', status: 'proses', tahap: '', riwayat: [], alur: (l.tahapan || []).map(t => t.nama), pesan: '' }];
 
   // Memecah data aplikasi menjadi dokumen Firestore. Bagian publik dan bagian khusus HR sengaja dipisah.
   function docsFromDb(db) {

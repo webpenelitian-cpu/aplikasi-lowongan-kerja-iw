@@ -594,7 +594,7 @@
       <section class="panel noprint"><h3>Susun pengumuman</h3>
         <div class="field"><label for="p-tahap">Tahap</label><select id="p-tahap" data-p-tahap>${l.tahapan.map(t => `<option value="${esc(t.id)}"${t.id === view.tahapId ? ' selected' : ''}>${esc(t.nama)}</option>`).join('')}</select></div>
         <div class="field"><label for="p-tanggal">Tanggal pengumuman</label><input id="p-tanggal" type="date" value="${esc(o.tanggal)}" data-a="tanggal"></div>
-        <div class="field"><label for="p-tindak">Tindak lanjut bagi yang lolos</label><textarea id="p-tindak" rows="4" placeholder="Jadwal dan tempat tahap berikutnya" data-a="tindak">${esc(o.tindak)}</textarea></div>
+        <div class="field"><label for="p-tindak">Tindak lanjut bagi yang lolos</label><textarea id="p-tindak" rows="4" placeholder="Jadwal dan tempat tahap berikutnya" aria-describedby="p-tindak-h" data-a="tindak">${esc(o.tindak)}</textarea><span class="hint" id="p-tindak-h">Hanya terlihat oleh peserta yang lolos lewat halaman Cek hasil, tidak tampil di pengumuman publik. Alamat https menjadi tautan.</span></div>
         <div class="opts"><label><input type="checkbox" data-a="tampilkanNama"${o.tampilkanNama ? ' checked' : ''}> Tampilkan nama peserta yang tidak lolos</label></div>
         <span class="hint">Secara bawaan peserta yang tidak lolos hanya tampil dengan nomor peserta, untuk menjaga privasi.</span>
         <div class="inline">${cloudOn ? '<button type="button" data-act="publish">Terbitkan ke portal</button>' : ''}<button type="button" class="${cloudOn ? 'ghost' : ''}" data-act="print">Cetak atau simpan PDF</button><button type="button" class="ghost" data-act="copy-ann">Salin teks</button></div>

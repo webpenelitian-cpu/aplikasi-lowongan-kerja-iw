@@ -307,8 +307,42 @@ details.panel > summary { cursor: pointer; font-weight: 600; }
 .done { max-width: 580px; margin: 0 auto; }
 .kode { font: 700 22px/1.4 Consolas, "Courier New", monospace; background: var(--surface-2); padding: 12px; border-radius: 8px; text-align: center; overflow-wrap: anywhere; }
 .status { font-weight: 600; }
-.riwayat { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.riwayat li { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+#cek[hidden] { display: none; }
+.hasil-wrap { display: grid; }
+.hasil { width: 100%; max-width: 680px; margin: 0 auto; display: grid; gap: 14px; }
+.hasil:focus { outline: none; }
+.hasil .eyebrow { font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.hasil-top { display: grid; gap: 4px; padding: 4px 2px; }
+.hasil-top h2 { font-size: 26px; line-height: 1.25; letter-spacing: -.01em; }
+.hasil-status { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px; border-radius: var(--radius); background: var(--chk-bg); color: var(--chk); }
+.hasil-status[data-s=lolos] { background: var(--ok-bg); color: var(--ok); }
+.hasil-status[data-s=tidak] { background: var(--surface-2); color: var(--text); }
+.hasil-status h3 { font-size: 18px; color: inherit; }
+.hasil-status p { color: var(--text); font-size: 14.5px; margin-top: 2px; }
+.ikon { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: currentColor; }
+.ikon::before { font-size: 17px; font-weight: 700; line-height: 1; content: "\2026"; color: var(--surface); }
+.hasil-status[data-s=lolos] .ikon::before { content: "\2713"; }
+.hasil-status[data-s=tidak] .ikon { background: var(--muted); }
+.hasil-status[data-s=tidak] .ikon::before { content: "\2013"; }
+.hasil-tindak, .hasil-alur { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; display: grid; gap: 10px; }
+.hasil-tindak a.linkbtn { margin-top: 2px; }
+.hasil-tindak a { overflow-wrap: anywhere; }
+.hasil-alur-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.linimasa { list-style: none; margin: 0; padding: 0; display: grid; }
+.linimasa li { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 0 0 16px 30px; font-size: 14.5px; }
+.linimasa li:last-child { padding-bottom: 0; }
+.linimasa li::before { content: ""; position: absolute; left: 0; top: 2px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; box-sizing: border-box; border: 2px solid var(--line); background: var(--surface); color: var(--surface); }
+.linimasa li:not(:last-child)::after { content: ""; position: absolute; left: 8px; top: 22px; bottom: 0; width: 2px; background: var(--line); }
+.linimasa li[data-s=lolos]::before { content: "\2713"; background: var(--ok); border-color: var(--ok); }
+.linimasa li[data-s=lolos]:not(:last-child)::after { background: var(--ok); }
+.linimasa li[data-s=tidak]::before { content: "\2013"; background: var(--muted); border-color: var(--muted); }
+.linimasa li[data-s=kini]::before { border-color: var(--accent); }
+.linimasa li[data-s=nanti] .nama { color: var(--muted); }
+.linimasa .ket { flex: none; font-size: 13px; color: var(--muted); }
+.linimasa li[data-s=lolos] .ket { color: var(--ok); }
+.linimasa li[data-s=kini] .ket { color: var(--accent); }
+.hasil-kaki { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 2px; }
+.hasil-kaki .hint { flex: 1 1 220px; }
 .login { max-width: 460px; margin: 24px auto; }
 .login code { overflow-wrap: anywhere; background: var(--surface-2); padding: 2px 5px; border-radius: 4px; }
 
