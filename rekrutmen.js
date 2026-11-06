@@ -118,19 +118,46 @@
     return parts.join('\n');
   }
 
+  // Teks tebal ditulis *seperti ini*: langsung tebal di WhatsApp, dan diubah ke HTML untuk email.
   function personalMessage(k, l, tahap, status, opts, namaPeserta) {
-    const pengirim = l.perusahaan || 'Tim Rekrutmen';
-    const head = `Yth. ${namaPeserta},\n\nTerima kasih telah mengikuti seleksi ${l.judul} (nomor peserta ${k.nomor}).`;
-    const body = status === 'lolos'
-      ? `Dengan senang hati kami sampaikan bahwa Anda dinyatakan LOLOS tahap ${tahap.nama}.${opts.tindak ? `\n\n${opts.tindak}` : ''}`
-      : `Setelah melalui pertimbangan, kami sampaikan bahwa Anda belum dapat melanjutkan ke tahap berikutnya setelah tahap ${tahap.nama}. Kami menghargai waktu dan minat Anda, dan semoga sukses dalam langkah karier selanjutnya.`;
-    return `${head}\n\n${body}\n\nSalam,\n${pengirim}`;
+    const pt = l.perusahaan ? ` di *${l.perusahaan}*` : '';
+    const akhir = (l.tahapan || []).length && l.tahapan[l.tahapan.length - 1].id === tahap.id;
+    const baris = [`Yth. Sdr./Sdri. *${namaPeserta}*`, `Nomor peserta: ${k.nomor}`];
+    if (opts.tanggal) baris.push(`Tanggal: ${tanggalId(opts.tanggal)}`);
+    baris.push('', `Perihal: *Hasil Tahap ${tahap.nama} untuk Posisi ${l.judul}*`, '', 'Dengan hormat,', '');
+    if (status === 'lolos') {
+      baris.push(`Terima kasih atas partisipasi Anda dalam proses seleksi untuk posisi *${l.judul}*${pt}.`, '');
+      baris.push(akhir
+        ? `Berdasarkan hasil penilaian, dengan senang hati kami sampaikan bahwa Anda dinyatakan *LOLOS* seluruh tahapan seleksi, hingga tahap *${tahap.nama}*.`
+        : `Berdasarkan hasil penilaian, dengan senang hati kami sampaikan bahwa Anda dinyatakan *LOLOS* pada tahap *${tahap.nama}*.`, '');
+      if (opts.tindak) baris.push('*Tindak lanjut:*', String(opts.tindak).replace(/\n{2,}/g, '\n').trim(), '');
+      baris.push('Mohon konfirmasi penerimaan pesan ini dengan membalasnya.');
+      if (l.kontak) baris.push(`Informasi lebih lanjut dapat ditanyakan melalui ${l.kontak}.`);
+      baris.push('', 'Seluruh proses seleksi tidak dipungut biaya apa pun. Mohon abaikan pihak yang meminta pembayaran atas nama perusahaan kami.');
+    } else {
+      baris.push(`Terima kasih atas waktu dan minat Anda mengikuti proses seleksi untuk posisi *${l.judul}*${pt}.`, '');
+      baris.push(`Setelah melalui proses penilaian, dengan berat hati kami sampaikan bahwa Anda *belum dapat melanjutkan* ke tahap berikutnya setelah tahap *${tahap.nama}*.`, '');
+      baris.push('Keputusan ini tidak mengurangi penghargaan kami atas kemampuan dan pengalaman Anda. Semoga Anda sukses dalam langkah karier selanjutnya.');
+      if (k.talentPool) baris.push('', 'Sesuai persetujuan Anda, data Anda tetap kami simpan untuk ditawari lowongan lain yang sesuai selama masa simpan.');
+      if (l.kontak) baris.push('', `Pertanyaan, keberatan, atau permintaan terkait data pribadi Anda dapat disampaikan melalui ${l.kontak}.`);
+    }
+    baris.push('', 'Demikian kami sampaikan. Atas perhatian Anda, kami ucapkan terima kasih.', '', 'Hormat kami,', '');
+    if (l.picNama) baris.push(`*${l.picNama}*`);
+    if (l.picJabatan) baris.push(l.picJabatan);
+    baris.push(l.perusahaan ? `*${l.perusahaan}*` : 'Tim Rekrutmen');
+    return baris.join('\n');
   }
 
-  // Berkas cadangan bisa berasal dari luar, jadi bentuknya diperiksa sebelum dipakai.
+  const pesanPolos = s => String(s).replace(/\*([^*\n]+)\*/g, '$1');
+  function pesanHtml(s) {
+    const aman = String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    return aman.replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+  }
+
   // Logo disimpan sebagai gambar kecil di dokumen lowongan. Hanya bitmap: SVG bisa membawa skrip.
   const logoSah = s => typeof s === 'string' && s.length <= 60000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(s);
 
+  // Berkas cadangan bisa berasal dari luar, jadi bentuknya diperiksa sebelum dipakai.
   function validBackup(d) {
     const idSah = x => typeof x === 'string' && /^[\w-]{1,64}$/.test(x); // id dipakai sebagai jalur dokumen
     return !!d && Array.isArray(d.lowongan) && Array.isArray(d.kandidat) &&
@@ -165,13 +192,35 @@
       if (last < 0) { sets.push(hasilAwal(k, l)); return; }
       const t = l.tahapan[last], status = statusOf(k, t);
       sets.push([`hasil/${k.id}`, {
-        nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', status, tahap: t.nama,
+        nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', kontak: l.kontak || '', status, tahap: t.nama,
         riwayat: l.tahapan.slice(0, last + 1).map(x => ({ nama: x.nama, status: statusOf(k, x) })),
         alur: l.tahapan.map(x => x.nama), tanggal: opts.tanggal || '',
         pesan: status === 'lolos' ? tindakOf(t) : '',
       }]);
     });
     return sets;
+  }
+
+  // Pengalaman kandidat mencakup semua pelamar, termasuk yang tidak diterima: siapa yang sudah menerima kabar?
+  function kabarPelamar(l, list) {
+    const out = { dikabari: 0, tertunda: 0, menunggu: 0 };
+    list.forEach(k => {
+      const putus = l.tahapan.filter(t => statusOf(k, t));
+      if (!putus.length) out.menunggu += 1;
+      else if ((l.terbit || {})[putus[putus.length - 1].id]) out.dikabari += 1;
+      else out.tertunda += 1;
+    });
+    return out;
+  }
+
+  // Kecocokan rekomendasi screening dengan keputusan HR. Lolos dan Pertimbangkan dihitung positif; Perlu cek manual tidak dihitung.
+  function kinerjaScreening(rows) {
+    const x = rows.filter(r => ['lolos', 'pertimbangkan', 'tidak'].includes(r.rekomendasi) && ['lolos', 'tidak'].includes(r.hasil));
+    const pos = r => r.rekomendasi !== 'tidak', tp = x.filter(r => pos(r) && r.hasil === 'lolos').length;
+    const fp = x.filter(r => pos(r) && r.hasil === 'tidak').length, fn = x.filter(r => !pos(r) && r.hasil === 'lolos').length;
+    const tn = x.length - tp - fp - fn, bagi = (a, b) => (b ? a / b : null);
+    const presisi = bagi(tp, tp + fp), recall = bagi(tp, tp + fn);
+    return { n: x.length, akurasi: bagi(tp + tn, x.length), presisi, recall, f1: presisi !== null && recall !== null && presisi + recall ? 2 * presisi * recall / (presisi + recall) : null };
   }
 
   // Saringan tahap: jumlah peserta yang sampai, lolos, tidak lolos, dan masih menunggu di tiap tahap.
@@ -182,7 +231,7 @@
     });
   }
 
-  const hasilAwal = (k, l) => [`hasil/${k.id}`, { nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', status: 'proses', tahap: '', riwayat: [], alur: (l.tahapan || []).map(t => t.nama), pesan: '' }];
+  const hasilAwal = (k, l) => [`hasil/${k.id}`, { nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', kontak: l.kontak || '', status: 'proses', tahap: '', riwayat: [], alur: (l.tahapan || []).map(t => t.nama), pesan: '' }];
 
   // Memecah data aplikasi menjadi dokumen Firestore. Bagian publik dan bagian khusus HR sengaja dipisah.
   function docsFromDb(db) {
@@ -192,13 +241,15 @@
       out.set(`lowongan/${l.id}`, clean({
         judul: l.judul, perusahaan: l.perusahaan || '', logo: l.logo || '', lokasiKerja: l.lokasiKerja || '', tenggat: l.tenggat || '',
         tutupPada: l.tenggat ? `${l.tenggat}T23:59:59+07:00` : '2100-01-01T00:00:00+07:00',
-        deskripsi: l.deskripsi || '', persyaratan: l.persyaratan || '', status: l.status || 'buka',
+        deskripsi: l.deskripsi || '', tentang: l.tentang || '', kompensasi: l.kompensasi || '', persyaratan: l.persyaratan || '', status: l.status || 'buka',
         kontak: l.kontak || '', retensi: l.retensi || '', contoh: !!l.contoh,
         alur: (l.tahapan || []).map(t => ({ nama: t.nama, keterangan: t.keterangan || '' })),
       }));
       out.set(`lowongan_hr/${l.id}`, clean({
         criteria: l.criteria, tahapan: l.tahapan, pengumuman: l.pengumuman || {},
-        kode: l.kode || '', terbit: l.terbit || {}, hapusPada: l.hapusPada || '',
+        kode: l.kode || '', terbit: l.terbit || {}, hapusPada: l.hapusPada || '', picNama: l.picNama || '', picJabatan: l.picJabatan || '',
+        permintaanNomor: l.permintaanNomor || '', permintaanUnit: l.permintaanUnit || '', permintaanJumlah: l.permintaanJumlah || '', pembelajaran: l.pembelajaran || '',
+        permintaanJenis: l.permintaanJenis || '', permintaanTanggal: l.permintaanTanggal || '', terisiTanggal: l.terisiTanggal || '', saluran: l.saluran || '', preboarding: l.preboarding || {},
       }));
     });
     db.kandidat.forEach(k => {
@@ -240,5 +291,5 @@
     return new TextDecoder().decode(data);
   }
 
-  root.Rekrutmen = { logoSah, lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
+  root.Rekrutmen = { kinerjaScreening, kabarPelamar, pesanPolos, pesanHtml, logoSah, lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
 })(typeof window !== 'undefined' ? window : globalThis);

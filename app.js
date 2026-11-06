@@ -173,10 +173,17 @@
       const f = R.funnel(pelamar(l.id), l.tahapan).reduce((a, r) => a + r.menunggu, 0);
       if (R.lewatMasaSimpan(l, hariIni())) out.push([l, 'Masa simpan data habis. Hapus data pelamarnya.']);
       if (f) out.push([l, `${f} peserta menunggu keputusan.`]);
+      const belum = R.kabarPelamar(l, pelamar(l.id)).tertunda;
+      if (belum) out.push([l, `${belum} peserta sudah diputuskan, tetapi hasilnya belum diterbitkan.`]);
       if (l.status === 'draf') out.push([l, 'Masih draf dan belum tampil di portal.']);
       if (l.status === 'buka' && !(l.perusahaan && l.kontak && l.retensi)) out.push([l, 'Dibuka, tetapi info wajib belum lengkap sehingga formulir tertutup.']);
     });
     return out;
+  }
+
+  function pengalamanHtml(k) {
+    return `<section class="panel"><h3>Pengalaman kandidat</h3><p class="hint">Semua pelamar perlu menerima kabar, termasuk yang tidak diterima.</p>
+      ${bars([{ label: 'Sudah menerima kabar', n: k.dikabari }, { label: 'Diputuskan, belum dikabarkan', n: k.tertunda }, { label: 'Belum diputuskan', n: k.menunggu }], 'Belum ada pelamar.')}</section>`;
   }
 
   function dasborHtml() {
@@ -191,10 +198,12 @@
     const saringan = [...tahap.values()].filter(x => x.n).map(x => ({ ...x, sub: `Lolos ${x.lolos} · Tidak ${x.tidak} · Menunggu ${x.menunggu}` }));
     const rek = Object.keys(REC).map(k => ({ label: REC[k], n: ks.filter(([c, l]) => recOf(c, l) === k).length }));
     const todo = tindakan();
+    const kabar = ls.map(l => R.kabarPelamar(l, pelamar(l.id))).reduce((a, x) => ({ dikabari: a.dikabari + x.dikabari, tertunda: a.tertunda + x.tertunda, menunggu: a.menunggu + x.menunggu }), { dikabari: 0, tertunda: 0, menunggu: 0 });
     return `<div class="stack"><div class="page-head"><h2>Dasbor rekrutmen</h2><button type="button" data-act="page" data-p="lowongan">Buat lowongan</button></div>
       ${kpi('k6', [[ls.filter(l => l.status === 'buka').length, 'Lowongan dibuka'], [ls.filter(l => l.status === 'draf').length, 'Draf'], [ks.length, 'Total pelamar'], [n('proses'), 'Dalam proses'], [n('lolos'), 'Lolos semua tahap'], [ks.filter(([k]) => k.talentPool).length, 'Talent pool']])}
       <div class="grid2"><section class="panel"><h3>Saringan rekrutmen</h3>${bars(saringan, 'Belum ada pelamar pada tahap mana pun.')}</section>
       <section class="panel"><h3>Rekomendasi screening</h3>${bars(rek, 'Belum ada CV yang dinilai.')}</section></div>
+      ${pengalamanHtml(kabar)}
       <section class="panel"><h3>Perlu tindakan</h3>${todo.length ? `<ul class="rows">${todo.slice(0, 8).map(([l, t]) => `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${esc(t)}</span></button></li>`).join('')}</ul>${todo.length > 8 ? `<p class="note">Dan ${todo.length - 8} hal lainnya.</p>` : ''}` : '<p class="note">Tidak ada yang perlu ditindaklanjuti.</p>'}</section>
       <section class="panel"><h3>Lowongan</h3>${ls.length ? `<ul class="rows">${ls.map(l => { const s = stat(l); return `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${s.total} pelamar · ${s.proses} proses · ${s.lolos} lolos · ${s.gugur} tidak lolos</span>${badgeL(l)}</button></li>`; }).join('')}</ul>` : '<p class="note">Belum ada lowongan.</p>'}</section></div>`;
   }
@@ -318,7 +327,9 @@
         <div class="field"><label for="i-lokasi">Lokasi kerja</label><input id="i-lokasi" type="text" value="${esc(l.lokasiKerja)}" data-l="lokasiKerja"></div>
         <div class="field"><label for="i-tenggat">Tenggat lamaran</label><input id="i-tenggat" type="date" value="${esc(l.tenggat)}" data-l="tenggat"></div>
         <div class="field"><label for="i-status">Status</label><select id="i-status" data-l="status"><option value="draf"${l.status === 'draf' ? ' selected' : ''}>Draf (belum tampil di portal)</option><option value="buka"${l.status === 'buka' ? ' selected' : ''}>Dibuka</option><option value="tutup"${l.status === 'tutup' ? ' selected' : ''}>Ditutup</option></select></div>
+        <div class="field"><label for="i-tentang">Tentang perusahaan</label><textarea id="i-tentang" rows="3" placeholder="Bidang usaha dan gambaran singkat lingkungan kerja" data-l="tentang">${esc(l.tentang)}</textarea></div>
         <div class="field"><label for="i-desk">Deskripsi pekerjaan</label><textarea id="i-desk" rows="4" data-l="deskripsi">${esc(l.deskripsi)}</textarea></div>
+        <div class="field"><label for="i-komp">Waktu kerja, gaji, dan benefit (opsional)</label><textarea id="i-komp" rows="3" placeholder="Isi sejauh perusahaan bersedia menyampaikannya" data-l="kompensasi">${esc(l.kompensasi)}</textarea><span class="hint">Tampil di portal pelamar.</span></div>
         <div class="field"><label for="paste">Persyaratan</label>
           <textarea id="paste" rows="6" data-l="persyaratan" placeholder="Satu syarat per baris.&#10;Minimal S1 jurusan Teknik Sipil&#10;Pengalaman minimal 3 tahun&#10;Menguasai AutoCAD, Excel">${esc(l.persyaratan)}</textarea>
           <span class="hint">Tampil di portal pelamar.</span>
@@ -327,6 +338,16 @@
           <label for="i-retensi">Masa simpan data pelamar</label><input id="i-retensi" type="text" value="${esc(l.retensi)}" placeholder="6 bulan setelah seleksi selesai" data-l="retensi">
           <label for="i-hapus">Tanggal hapus data</label><input id="i-hapus" type="date" value="${esc(l.hapusPada)}" data-l="hapusPada">
           <span class="hint">Perusahaan, kontak, dan masa simpan wajib diisi. Tanpa itu pelamar belum bisa melamar.</span></div>` : ''}
+        <fieldset class="wz-g"><legend>Permintaan rekrutmen (internal)</legend>
+          <div class="field-2"><div class="field"><label for="i-jenis">Jenis kebutuhan</label><select id="i-jenis" data-l="permintaanJenis">${[['', 'Pilih'], ['pengganti', 'Mengisi posisi yang kosong'], ['baru', 'Posisi baru'], ['banyak', 'Banyak posisi sekaligus']].map(([v, t]) => `<option value="${v}"${(l.permintaanJenis || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+          <div class="field"><label for="i-minta">Nomor permintaan</label><input id="i-minta" type="text" maxlength="60" value="${esc(l.permintaanNomor)}" placeholder="FPTK-001/XI/2026" data-l="permintaanNomor"></div>
+          <div class="field"><label for="i-unit">Unit pemohon</label><input id="i-unit" type="text" maxlength="100" value="${esc(l.permintaanUnit)}" data-l="permintaanUnit"></div>
+          <div class="field"><label for="i-jumlah">Jumlah posisi</label><input id="i-jumlah" type="number" min="1" max="999" value="${esc(l.permintaanJumlah)}" data-l="permintaanJumlah"></div>
+          <div class="field"><label for="i-mulai">Tanggal permintaan</label><input id="i-mulai" type="date" value="${esc(l.permintaanTanggal)}" data-l="permintaanTanggal"></div>
+          <div class="field"><label for="i-terisi">Tanggal posisi terisi</label><input id="i-terisi" type="date" value="${esc(l.terisiTanggal)}" data-l="terisiTanggal"></div></div>
+          <div class="field"><label for="i-saluran">Saluran rekrutmen</label><input id="i-saluran" type="text" maxlength="200" value="${esc(l.saluran)}" placeholder="Contoh: portal ini, LinkedIn, referensi karyawan" data-l="saluran"></div>
+          <span class="hint">Hanya untuk tim HR, tidak tampil di portal.</span>
+        </fieldset>
       </section>
       <section class="panel"><h3>Ketentuan screening</h3>
         <div id="criteria">${FIELDS.map(f => fieldHtml(l, f)).join('')}${c.tambahan.map(customHtml).join('')}
@@ -463,13 +484,42 @@
     const c = l.criteria;
     const adaKriteria = S.LEVELS.some(x => x.k === c.pendidikan.level) || ['jurusan', 'keahlian'].some(k => c[k].items.trim()) || +c.pengalaman.tahun > 0;
     return [
+      ['Permintaan rekrutmen tercatat', !!(l.permintaanNomor && l.permintaanUnit)],
       ['Perusahaan, kontak, dan masa simpan data terisi', !!(l.perusahaan && l.kontak && l.retensi)],
       ['Persyaratan dan deskripsi pekerjaan terisi', !!(l.persyaratan && l.deskripsi)],
+      ['Gambaran perusahaan tersedia untuk pelamar', !!l.tentang],
       ['Ketentuan screening terisi', adaKriteria],
       ['Tidak ada syarat ciri pribadi', !S.findProtected(l.persyaratan)],
       ['Tiap tahap punya keterangan untuk pelamar', l.tahapan.length > 0 && l.tahapan.every(t => t.keterangan)],
       ['Tanggal hapus data ditetapkan', !!l.hapusPada],
     ];
+  }
+
+  const persen = x => (x === null || x === undefined ? '-' : `${Math.round(x * 100)}%`);
+  const nilai = rows => `<dl class="metrik">${rows.map(([t, v]) => `<div><dt>${esc(t)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+
+  function metrikHtml(l, s) {
+    const posisi = +l.permintaanJumlah || 0, cocok = s.list.filter(k => ['lolos', 'pertimbangkan'].includes(recOf(k, l))).length;
+    const hari = l.permintaanTanggal && l.terisiTanggal ? Math.round((new Date(l.terisiTanggal) - new Date(l.permintaanTanggal)) / 864e5) : null;
+    return `<section class="panel"><h3>Metrik rekrutmen</h3>${nilai([
+      ['Pelamar per posisi', posisi ? S.idn(Math.round(s.total / posisi * 10) / 10) : '-'],
+      ['Direkomendasikan screening', s.total ? persen(cocok / s.total) : '-'],
+      ['Masuk talent pool', s.total ? persen(s.list.filter(k => k.talentPool).length / s.total) : '-'],
+      ['Lama pengisian', hari === null ? '-' : `${hari} hari`],
+    ])}<p class="hint">Isi jumlah posisi, tanggal permintaan, dan tanggal terisi di tab Ketentuan.</p></section>`;
+  }
+
+  function kecocokanHtml(l, s) {
+    const t = l.tahapan[0], m = R.kinerjaScreening(t ? s.list.map(k => ({ rekomendasi: recOf(k, l), hasil: R.statusOf(k, t) })) : []);
+    return `<section class="panel"><h3>Kecocokan screening dengan keputusan HR</h3>${m.n ? nilai([['Akurasi', persen(m.akurasi)], ['Presisi', persen(m.presisi)], ['Recall', persen(m.recall)], ['Skor F1', persen(m.f1)]]) : '<p class="note">Belum ada keputusan pada tahap pertama untuk dibandingkan.</p>'}
+      <p class="hint">Dibandingkan dari ${m.n} peserta pada tahap ${esc(t ? t.nama : '-')}. Keputusan HR bisa terpengaruh rekomendasi, jadi angka ini bahan tinjauan, bukan bukti keakuratan. Periksa berkala, terutama bila ada kelompok yang sering tersaring.</p></section>`;
+  }
+
+  const PREBOARDING = [['surat', 'Surat selamat datang'], ['agenda', 'Agenda hari dan minggu pertama'], ['profil', 'Visi, misi, nilai, dan struktur organisasi'], ['aturan', 'Kode etik, kerahasiaan, serta keselamatan dan kesehatan kerja'], ['kontak', 'Kontak yang bisa dihubungi untuk bertanya'], ['dokumen', 'Pemberitahuan dokumen yang perlu disiapkan'], ['atasan', 'Pertemuan dengan atasan dan tim'], ['admin', 'Pemberitahuan ke bagian penggajian dan benefit'], ['alat', 'Perlengkapan kerja dan akses sistem']];
+  function preboardingHtml(l) {
+    const p = l.preboarding || {};
+    return `<section class="panel"><h3>Persiapan bergabung</h3><p class="hint">Jaga komunikasi dengan calon pekerja sampai hari pertama.</p>
+      <ul class="cek2">${PREBOARDING.map(([k, t]) => `<li><label class="consent"><input type="checkbox" data-pb="${k}"${p[k] ? ' checked' : ''}> <span>${esc(t)}</span></label></li>`).join('')}</ul></section>`;
   }
 
   function ringkasanHtml(l) {
@@ -480,6 +530,10 @@
       <div class="grid-side"><section class="panel"><h3>Saringan tahap</h3>${bars(f, '', true)}</section>
       <section class="panel"><h3>Kesiapan lowongan</h3>
         <ul class="ready">${kesiapan(l).map(([t, ok]) => `<li><span class="badge ${ok ? 'b-lolos' : 'b-tidak'}">${ok ? 'Siap' : 'Belum'}</span><span>${esc(t)}</span></li>`).join('')}</ul></section></div>
+      <div class="grid2">${pengalamanHtml(R.kabarPelamar(l, s.list))}${metrikHtml(l, s)}</div>
+      ${s.lolos ? preboardingHtml(l) : ''}
+      <div class="grid2">${kecocokanHtml(l, s)}
+      <section class="panel"><h3>Tinjauan dan pembelajaran</h3><div class="field"><label for="i-belajar">Catatan untuk rekrutmen berikutnya</label><textarea id="i-belajar" rows="6" placeholder="Bagian mana yang sesuai rencana dan mana yang tidak? Apa masukan pemangku kepentingan? Saluran dan cara penilaian apa yang perlu dipertahankan atau diubah?" data-l="pembelajaran">${esc(l.pembelajaran)}</textarea><span class="hint">Hanya untuk tim HR. Hindari menulis nama pelamar di sini.</span></div></section></div>
     </div>`;
   }
 
@@ -596,8 +650,13 @@
         <div class="field"><label for="p-tahap">Tahap</label><select id="p-tahap" data-p-tahap>${l.tahapan.map(t => `<option value="${esc(t.id)}"${t.id === view.tahapId ? ' selected' : ''}>${esc(t.nama)}</option>`).join('')}</select></div>
         <div class="field"><label for="p-tanggal">Tanggal pengumuman</label><input id="p-tanggal" type="date" value="${esc(o.tanggal)}" data-a="tanggal"></div>
         <div class="field"><label for="p-tindak">Tindak lanjut bagi yang lolos</label><textarea id="p-tindak" rows="4" placeholder="Jadwal dan tempat tahap berikutnya" aria-describedby="p-tindak-h" data-a="tindak">${esc(o.tindak)}</textarea><span class="hint" id="p-tindak-h">Hanya terlihat oleh peserta yang lolos lewat halaman Cek hasil, tidak tampil di pengumuman publik. Alamat https menjadi tautan.</span></div>
+        <fieldset class="wz-g"><legend>Penanda tangan pesan perorangan</legend>
+          <div class="field"><label for="p-pic">Nama PIC</label><input id="p-pic" type="text" maxlength="100" value="${esc(l.picNama)}" placeholder="Contoh: Budi Santoso" data-l="picNama"></div>
+          <div class="field"><label for="p-jabatan">Jabatan PIC</label><input id="p-jabatan" type="text" maxlength="100" value="${esc(l.picJabatan)}" placeholder="Contoh: HR Manager" data-l="picJabatan"></div>
+        </fieldset>
         <div class="opts"><label><input type="checkbox" data-a="tampilkanNama"${o.tampilkanNama ? ' checked' : ''}> Tampilkan nama peserta yang tidak lolos</label></div>
         <span class="hint">Secara bawaan peserta yang tidak lolos hanya tampil dengan nomor peserta, untuk menjaga privasi.</span>
+        <span class="hint">Pada keputusan akhir, kabari peserta terpilih lebih dulu. Peserta lain dikabari dan diberi ucapan terima kasih setelah penawaran diterima, supaya masih ada cadangan bila penawaran ditolak.</span>
         <div class="inline">${cloudOn ? '<button type="button" data-act="publish">Terbitkan ke portal</button>' : ''}<button type="button" class="${cloudOn ? 'ghost' : ''}" data-act="print">Cetak atau simpan PDF</button><button type="button" class="ghost" data-act="copy-ann">Salin teks</button></div>
         ${cloudOn ? `<span class="hint">${(l.terbit || {})[view.tahapId] ? 'Tahap ini sudah pernah diterbitkan. Terbitkan lagi bila ada perubahan.' : 'Belum diterbitkan. Pelamar belum bisa melihat hasil tahap ini.'} Portal hanya menampilkan nomor peserta. Tiap pelamar melihat hasilnya sendiri dengan kode.</span>` : ''}
         <p id="copy-note" class="note" role="status" hidden></p>
@@ -623,16 +682,29 @@
     w.hidden = !g.belum.length;
     if (g.belum.length) w.textContent = `${g.belum.length} peserta belum diputuskan pada tahap ini dan belum masuk pengumuman. Lengkapi di tab Tahapan.`;
     const people = g.lolos.map(k => [k, 'lolos']).concat(g.tidak.map(k => [k, 'tidak']));
-    $('personal').innerHTML = `<h3>Pesan perorangan</h3><p class="hint">Salin lalu kirim sendiri lewat email atau WhatsApp. Aplikasi tidak mengirim apa pun.</p>
+    $('personal').innerHTML = `<h3>Pesan perorangan</h3><p class="hint">Salin lalu kirim sendiri lewat WhatsApp atau email. Isi pesan bisa diedit langsung. Tulis *seperti ini* untuk teks tebal. Aplikasi tidak mengirim apa pun.</p>
+      ${l.picNama ? '' : '<p class="warn">Isi Nama PIC agar pesan ditutup dengan nama penanda tangan.</p>'}
       ${people.length ? `<ul class="people">${people.map(([k, s]) => {
         const f = factsOf(k);
-        return `<li><span class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)}${f && f.email ? ` · ${esc(f.email)}` : ''}</small></span><span class="badge b-${s}">${s === 'lolos' ? 'Lolos' : 'Tidak lolos'}</span><button type="button" class="ghost" data-act="copy-msg" data-k="${esc(k.id)}" data-s="${s}">Salin pesan</button></li>`;
+        return `<li><span class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)}${f && f.email ? ` · ${esc(f.email)}` : ''}</small></span><span class="badge b-${s}">${s === 'lolos' ? 'Lolos' : 'Tidak lolos'}</span><div class="field pesan-isi"><label for="m-${esc(k.id)}">Isi pesan untuk ${esc(namaOf(k))}</label><textarea id="m-${esc(k.id)}" rows="16" data-pesan="${esc(k.id)}" data-s="${s}">${esc(pesanUntuk(k, l, tahap, s, o))}</textarea></div>
+          <div class="aksi"><button type="button" class="ghost" data-act="copy-msg" data-f="wa" data-k="${esc(k.id)}" data-s="${s}">Salin untuk WhatsApp</button><button type="button" class="ghost" data-act="copy-msg" data-f="email" data-k="${esc(k.id)}" data-s="${s}">Salin untuk email</button><button type="button" class="ghost" data-act="reset-msg" data-k="${esc(k.id)}" data-s="${s}"${(o.pesan || {})[`${k.id}_${s}`] === undefined ? ' hidden' : ''}>Kembalikan teks otomatis</button></div></li>`;
       }).join('')}</ul>` : '<p class="note">Belum ada peserta yang diputuskan pada tahap ini.</p>'}`;
   }
 
-  async function copyText(text, noteText) {
+  // Teks yang sudah diedit PIC disimpan per peserta dan per hasil, supaya tidak tertukar bila keputusan berubah.
+  const pesanUntuk = (k, l, tahap, s, o) => {
+    const edit = (o.pesan || {})[`${k.id}_${s}`];
+    return edit !== undefined ? edit : R.personalMessage(k, l, tahap, s, o, namaOf(k));
+  };
+
+  async function copyText(text, noteText, html) {
     let ok = false;
-    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+    try {
+      if (html && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+      } else await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch (e) {
       const t = document.createElement('textarea');
       t.value = text; document.body.appendChild(t); t.select();
       try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
@@ -723,7 +795,7 @@
 
   function wzBaru() {
     const akhir = db.lowongan.find(x => !x.contoh) || {};
-    return { posisi: '', jenjang: 'madya', perusahaan: akhir.perusahaan || '', logo: akhir.logo || '', lokasi: '', kontak: akhir.kontak || '', retensi: akhir.retensi || '6 bulan setelah seleksi selesai', tenggat: '', draft: null };
+    return { posisi: '', jenjang: 'madya', perusahaan: akhir.perusahaan || '', logo: akhir.logo || '', picNama: akhir.picNama || '', picJabatan: akhir.picJabatan || '', lokasi: '', kontak: akhir.kontak || '', retensi: akhir.retensi || '6 bulan setelah seleksi selesai', tenggat: '', draft: null };
   }
 
   function wzGroup(key, judul, hint, wajib) {
@@ -796,7 +868,7 @@
       save(); render();
       return;
     }
-    const posisi = wz.posisi.trim() || d.posisi, extra = { perusahaan: wz.perusahaan, logo: wz.logo, lokasiKerja: wz.lokasi, kontak: wz.kontak, retensi: wz.retensi, tenggat: wz.tenggat, deskripsi: t.deskripsi, persyaratan: t.persyaratan, status, criteria: TL.keKriteria(d, S.defaultCriteria()) };
+    const posisi = wz.posisi.trim() || d.posisi, extra = { perusahaan: wz.perusahaan, logo: wz.logo, picNama: wz.picNama, picJabatan: wz.picJabatan, lokasiKerja: wz.lokasi, kontak: wz.kontak, retensi: wz.retensi, tenggat: wz.tenggat, deskripsi: t.deskripsi, persyaratan: t.persyaratan, status, criteria: TL.keKriteria(d, S.defaultCriteria()) };
     wz = null;
     createJob(posisi, extra);
   }
@@ -861,13 +933,21 @@
     if (d.pool) { view.pool[d.pool] = el.value; renderPool(); return; }
     if (!l) return;
     const val = el.type === 'checkbox' ? el.checked : el.value;
-    if (d.l) { l[d.l] = val; if (d.l === 'judul') app.querySelector('.detail-head h2').textContent = val; }
+    if (d.l) { l[d.l] = val; if (d.l === 'judul') app.querySelector('.detail-head h2').textContent = val; if (d.l.startsWith('pic')) renderAnnounce(l); }
     else if (d.root) l.criteria[d.root] = val;
     else if (d.c) l.criteria[d.c][d.p] = val;
     else if (d.x !== undefined) l.criteria.tambahan[+d.x][d.p] = val;
     else if (d.stage) { const t = l.tahapan.find(x => x.id === d.stage); if (t) { t[d.f] = val; if (e.type === 'change' && d.f === 'nama') { $('matrix').innerHTML = stageView(l); perbaruiTerbit(l); } } }
     else if (d.note) { const k = db.kandidat.find(x => x.id === d.note); if (k) k.catatan = val; }
     else if (d.a) { pengumumanState(l)[d.a] = val; renderAnnounce(l); }
+    else if (d.pesan) {
+      const o = pengumumanState(l);
+      o.pesan = o.pesan || {};
+      o.pesan[`${d.pesan}_${d.s}`] = val;
+      const r = app.querySelector(`[data-act="reset-msg"][data-k="${d.pesan}"]`);
+      if (r) r.hidden = false; // tidak digambar ulang agar kursor tetap di tempat
+    }
+    else if (d.pb) { l.preboarding = l.preboarding || {}; l.preboarding[d.pb] = val; }
     else if (d.pTahap !== undefined) { view.tahapId = val; render(); return; }
     else return;
     updateWarning(l);
@@ -935,6 +1015,8 @@
       const l = current(), k = db.kandidat.find(x => x.id === el.dataset.id);
       if (!k || !window.confirm(`Hapus data ${namaOf(k)}?`)) return;
       db.kandidat = db.kandidat.filter(x => x !== k);
+      // Pesan yang diedit memuat nama pelamar, jadi ikut dihapus.
+      Object.values(l.pengumuman || {}).forEach(p => Object.keys(p.pesan || {}).forEach(x => { if (x.startsWith(`${k.id}_`)) delete p.pesan[x]; }));
       factsCache.delete(k.id); openIds.delete(k.id);
       perbaruiTerbit(l, k.nomor);
       save(); renderList(l);
@@ -1011,7 +1093,14 @@
     'copy-msg'(el) {
       const l = current(), k = db.kandidat.find(x => x.id === el.dataset.k), o = pengumumanState(l);
       const tahap = l.tahapan.find(t => t.id === view.tahapId);
-      copyText(R.personalMessage(k, l, tahap, el.dataset.s, o, namaOf(k)), `Pesan untuk ${namaOf(k)} tersalin.`);
+      const pesan = pesanUntuk(k, l, tahap, el.dataset.s, o);
+      if (el.dataset.f === 'email') copyText(R.pesanPolos(pesan), `Pesan email untuk ${namaOf(k)} tersalin.`, `<div>${R.pesanHtml(pesan)}</div>`);
+      else copyText(pesan, `Pesan WhatsApp untuk ${namaOf(k)} tersalin.`);
+    },
+    'reset-msg'(el) {
+      const l = current(), o = pengumumanState(l);
+      delete (o.pesan || {})[`${el.dataset.k}_${el.dataset.s}`];
+      save(); renderAnnounce(l);
     },
     async backup() {
       const pw = await askPassword('Buat kata sandi cadangan', 'Minimal 8 karakter. Kata sandi ini tidak bisa dipulihkan bila lupa.');

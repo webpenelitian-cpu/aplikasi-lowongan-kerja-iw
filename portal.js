@@ -95,7 +95,7 @@
       <div class="field"><label class="consent"><input id="a-setuju" type="checkbox" aria-describedby="a-err"> <span>Saya menyetujui ${esc(l.perusahaan)} memproses data pribadi dan isi CV saya untuk seleksi ${esc(l.judul)}, dan menyimpannya paling lama ${esc(l.retensi)}. Saya dapat meminta data saya diakses, diperbaiki, atau dihapus melalui ${esc(l.kontak)}.</span></label>
         <label class="consent"><input id="a-pool" type="checkbox"> <span>Opsional: simpan data saya untuk ditawari lowongan lain yang sesuai selama masa simpan di atas.</span></label>
         <span class="hint">CV dicocokkan otomatis dengan persyaratan sebagai rekomendasi awal. Keputusan tetap dibuat oleh tim HR, dan Anda dapat mengajukan keberatan melalui kontak di atas.</span>
-        <span class="hint">Butuh penyesuaian seleksi karena disabilitas? Hubungi ${esc(l.kontak)}.</span>
+        <span class="hint">Ada pertanyaan tentang lowongan atau seleksi, atau butuh penyesuaian karena disabilitas? Hubungi ${esc(l.kontak)}.</span>
         <span class="hint"><a href="#/privasi">Baca pemberitahuan privasi pelamar</a></span></div>
       <p id="a-err" class="warn" role="alert" hidden></p>
       <button type="submit" class="start">Kirim lamaran</button>
@@ -116,8 +116,10 @@
       <section class="job-top">${logo(l)}<div class="job-top-in"><div class="job-head">${badgeOf(l)}<h2>${esc(l.judul)}</h2></div><p class="note">${esc(meta(l))}</p></div>
         ${bisa ? '<button type="button" id="to-apply">Lamar sekarang</button>' : ''}</section>
       <div class="two"><section class="panel">
+        ${l.tentang ? `<h3>Tentang perusahaan</h3><p class="pre">${esc(l.tentang)}</p>` : ''}
         ${l.deskripsi ? `<h3>Deskripsi pekerjaan</h3><p class="pre">${esc(l.deskripsi)}</p>` : ''}
         ${l.persyaratan ? `<h3>Persyaratan</h3><p class="pre">${esc(l.persyaratan)}</p>` : ''}
+        ${l.kompensasi ? `<h3>Waktu kerja, gaji, dan benefit</h3><p class="pre">${esc(l.kompensasi)}</p>` : ''}
         ${alurHtml(l)}
       </section><div class="stack">${closed || formHtml(l)}${ann.length ? `<section class="stack"><h3>Pengumuman</h3>${ann.map(announceHtml).join('')}<p class="hint">Hanya nomor peserta yang ditampilkan. Nomor Anda ada di halaman Cek hasil.</p></section>` : ''}</div></div>`;
     const form = document.getElementById('apply');
@@ -223,6 +225,8 @@
       <h3>Data yang dikumpulkan</h3><ul><li>Nama, email, dan nomor telepon yang Anda isi.</li><li>Teks dari CV Anda. File aslinya tidak disimpan.</li><li>Hasil tiap tahap seleksi dan catatan penilaian.</li></ul>
       <h3>Tujuan dan dasar pemrosesan</h3><p>Data dipakai untuk menilai lamaran dan menghubungi Anda selama seleksi, berdasarkan persetujuan yang Anda berikan saat melamar. Bila Anda memilih talent pool, data juga dipakai untuk menawarkan lowongan lain yang sesuai.</p>
       <h3>Penilaian otomatis</h3><p>CV dicocokkan otomatis dengan persyaratan jabatan sebagai rekomendasi awal. Rekomendasi itu tidak menjadi keputusan. Tim HR memeriksa dan memutuskan, dan Anda dapat mengajukan keberatan.</p>
+      <h3>Cara kerja penilaian otomatis</h3><p>Aplikasi membaca teks CV lalu mencocokkannya dengan ketentuan yang ditetapkan tim HR untuk lowongan itu, seperti pendidikan, pengalaman, dan keahlian. Pencocokan memakai aturan yang tetap dan tidak memakai pembelajaran mesin.</p>
+      <h3>Verifikasi</h3><p>Dokumen hanya diminta sejauh dibutuhkan jabatan. Pemeriksaan latar belakang dilakukan setelah Anda diberi tahu dan memberi persetujuan tertulis.</p>
       <h3>Penyimpanan dan penerima data</h3><ul><li>Data disimpan di layanan Google Firebase, wilayah Jakarta, dan hanya bisa dibuka akun HR yang berwenang.</li><li>Google reCAPTCHA memproses data teknis perangkat untuk mencegah penyalahgunaan.</li><li>Masa simpan tercantum pada persetujuan di formulir lowongan. Setelah itu data dihapus.</li></ul>
       <h3>Pengumuman</h3><p>Portal hanya menampilkan nomor peserta. Nama, kontak, dan skor Anda tidak dipublikasikan di portal.</p>
       <h3>Hak Anda</h3><p>Anda dapat meminta akses, perbaikan, atau penghapusan data, menarik persetujuan, dan mengajukan keberatan atas penilaian otomatis, melalui kontak HR yang tercantum pada lowongan. Menarik persetujuan dapat menghentikan proses seleksi Anda.</p>
@@ -265,7 +269,7 @@
       <div class="hasil-status" data-s="${jenis}"><span class="ikon" aria-hidden="true"></span><div><h3>${kepala[0]}</h3>${kepala[1] ? `<p>${kepala[1]}</p>` : ''}</div></div>
       ${h.pesan ? `<div class="hasil-tindak"><h3>Tindak lanjut</h3><p class="pre">${tautan(h.pesan)}</p></div>` : ''}
       ${langkah ? `<div class="hasil-alur"><div class="hasil-alur-top"><h3>Perjalanan seleksi</h3>${lengkap ? `<span class="note">${lolos} dari ${alur.length} tahap</span>` : ''}</div><ol class="linimasa">${langkah}</ol></div>` : ''}
-      <div class="hasil-kaki"><button type="button" class="ghost" id="c-lagi">Cek kode lain</button><p class="hint">Simpan kode lamaran Anda dan jangan bagikan kepada orang lain.</p></div>
+      <div class="hasil-kaki"><button type="button" class="ghost" id="c-lagi">Cek kode lain</button><p class="hint">${h.kontak ? `Ada pertanyaan tentang hasil ini? Hubungi ${esc(h.kontak)}. ` : ''}Simpan kode lamaran Anda dan jangan bagikan kepada orang lain.</p></div>
     </section>`;
   }
 
