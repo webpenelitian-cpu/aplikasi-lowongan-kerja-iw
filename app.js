@@ -314,6 +314,7 @@
       <section class="panel"><h3>Info lowongan</h3>
         <div class="field"><label for="i-judul">Nama posisi</label><input id="i-judul" type="text" value="${esc(l.judul)}" data-l="judul"></div>
         <div class="field"><label for="i-perusahaan">Perusahaan</label><input id="i-perusahaan" type="text" value="${esc(l.perusahaan)}" data-l="perusahaan"></div>
+        ${logoField('i-logo', l.logo, l.perusahaan)}
         <div class="field"><label for="i-lokasi">Lokasi kerja</label><input id="i-lokasi" type="text" value="${esc(l.lokasiKerja)}" data-l="lokasiKerja"></div>
         <div class="field"><label for="i-tenggat">Tenggat lamaran</label><input id="i-tenggat" type="date" value="${esc(l.tenggat)}" data-l="tenggat"></div>
         <div class="field"><label for="i-status">Status</label><select id="i-status" data-l="status"><option value="draf"${l.status === 'draf' ? ' selected' : ''}>Draf (belum tampil di portal)</option><option value="buka"${l.status === 'buka' ? ' selected' : ''}>Dibuka</option><option value="tutup"${l.status === 'tutup' ? ' selected' : ''}>Ditutup</option></select></div>
@@ -722,7 +723,7 @@
 
   function wzBaru() {
     const akhir = db.lowongan.find(x => !x.contoh) || {};
-    return { posisi: '', jenjang: 'madya', perusahaan: akhir.perusahaan || '', lokasi: '', kontak: akhir.kontak || '', retensi: akhir.retensi || '6 bulan setelah seleksi selesai', tenggat: '', draft: null };
+    return { posisi: '', jenjang: 'madya', perusahaan: akhir.perusahaan || '', logo: akhir.logo || '', lokasi: '', kontak: akhir.kontak || '', retensi: akhir.retensi || '6 bulan setelah seleksi selesai', tenggat: '', draft: null };
   }
 
   function wzGroup(key, judul, hint, wajib) {
@@ -745,6 +746,7 @@
           <button type="button" class="ghost start" data-act="wz-regen">Susun ulang dari posisi</button>
           <div class="field"><label for="w-jenjang">Jenjang</label><select id="w-jenjang" data-wj>${TL.JENJANG.map(j => `<option value="${j.k}"${wz.jenjang === j.k ? ' selected' : ''}>${esc(j.label)}</option>`).join('')}</select></div>
           ${isian('w-perusahaan', 'Perusahaan', 'perusahaan', 'type="text"')}
+          ${logoField('w-logo', wz.logo, wz.perusahaan)}
           ${isian('w-lokasi', 'Lokasi kerja', 'lokasi', 'type="text"')}
           ${isian('w-tenggat', 'Tenggat lamaran', 'tenggat', 'type="date"')}
           ${isian('w-kontak', 'Kontak permintaan data pelamar', 'kontak', 'type="text" placeholder="Email HR"')}
@@ -788,20 +790,61 @@
     if (wz.targetId) {
       const l = db.lowongan.find(x => x.id === wz.targetId);
       if ((l.persyaratan || l.deskripsi) && !window.confirm('Ganti deskripsi, persyaratan, dan ketentuan screening lowongan ini dengan hasil baru?')) return;
-      Object.assign(l, { judul: wz.posisi.trim() || l.judul, perusahaan: wz.perusahaan, lokasiKerja: wz.lokasi, kontak: wz.kontak, retensi: wz.retensi, tenggat: wz.tenggat, deskripsi: t.deskripsi, persyaratan: t.persyaratan });
+      Object.assign(l, { judul: wz.posisi.trim() || l.judul, perusahaan: wz.perusahaan, logo: wz.logo, lokasiKerja: wz.lokasi, kontak: wz.kontak, retensi: wz.retensi, tenggat: wz.tenggat, deskripsi: t.deskripsi, persyaratan: t.persyaratan });
       l.criteria = TL.keKriteria(d, l.criteria);
       wz = null; view.tab = 'ketentuan';
       save(); render();
       return;
     }
-    const posisi = wz.posisi.trim() || d.posisi, extra = { perusahaan: wz.perusahaan, lokasiKerja: wz.lokasi, kontak: wz.kontak, retensi: wz.retensi, tenggat: wz.tenggat, deskripsi: t.deskripsi, persyaratan: t.persyaratan, status, criteria: TL.keKriteria(d, S.defaultCriteria()) };
+    const posisi = wz.posisi.trim() || d.posisi, extra = { perusahaan: wz.perusahaan, logo: wz.logo, lokasiKerja: wz.lokasi, kontak: wz.kontak, retensi: wz.retensi, tenggat: wz.tenggat, deskripsi: t.deskripsi, persyaratan: t.persyaratan, status, criteria: TL.keKriteria(d, S.defaultCriteria()) };
     wz = null;
     createJob(posisi, extra);
   }
 
   // ---- Peristiwa ----
+  // Gambar digambar ulang di kanvas: ukurannya kecil, metadata terbuang, dan isi selain piksel tidak ikut tersimpan.
+  async function siapkanLogo(file) {
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Gunakan logo berformat PNG, JPG, atau WebP.');
+    if (file.size > 2 * 1024 * 1024) throw new Error('Ukuran logo maksimal 2 MB.');
+    let img;
+    try { img = await createImageBitmap(file); } catch (e) { throw new Error('File logo rusak atau tidak bisa dibaca.'); }
+    if (img.width * img.height > 40e6) throw new Error('Dimensi gambar logo terlalu besar.');
+    const skala = Math.min(1, 160 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * skala));
+    c.height = Math.max(1, Math.round(img.height * skala));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    let hasil = c.toDataURL('image/webp', 0.85);
+    if (!R.logoSah(hasil)) {
+      const x = c.getContext('2d');
+      x.globalCompositeOperation = 'destination-over'; x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height);
+      hasil = c.toDataURL('image/jpeg', 0.8);
+    }
+    if (!R.logoSah(hasil)) throw new Error('Logo tidak bisa diproses. Coba gambar lain.');
+    return hasil;
+  }
+
+  async function pasangLogo(el) {
+    const file = el.files[0];
+    if (!file) return;
+    try {
+      const logo = await siapkanLogo(file);
+      if (wz) wz.logo = logo; else { current().logo = logo; save(); }
+      showBanner('');
+      render();
+    } catch (e) { el.value = ''; showBanner(e.message); }
+  }
+
+  function logoField(id, logo, teks) {
+    const pratinjau = R.logoSah(logo) ? `<span class="logo logo-img"><img src="${esc(logo)}" alt="Logo saat ini"></span>` : `<span class="logo" aria-hidden="true">${esc(String(teks || 'L').trim().charAt(0).toUpperCase() || 'L')}</span>`;
+    return `<div class="field"><label for="${id}">Logo perusahaan (opsional)</label><div class="logo-pilih">${pratinjau}<div class="logo-isi"><input id="${id}" type="file" accept="image/png,image/jpeg,image/webp" data-logo aria-describedby="${id}-h">
+      <span class="hint" id="${id}-h">PNG, JPG, atau WebP, maksimal 2 MB. Tampil di halaman pelamar di atas kotak putih, jadi hindari logo berwarna putih tanpa latar.</span>
+      ${logo ? '<button type="button" class="ghost start" data-act="logo-del">Hapus logo</button>' : ''}</div></div></div>`;
+  }
+
   function onInput(e) {
     const el = e.target, l = current(), d = el.dataset;
+    if (d.logo !== undefined) { if (e.type === 'change') pasangLogo(el); return; }
     if (wz) {
       if (d.wa) wz[d.wa] = el.value;
       else if (d.wj !== undefined) {
@@ -856,7 +899,7 @@
     'wz-from'() {
       const l = current();
       if (!l.judul.trim()) { $('i-judul').focus(); return; }
-      wz = { ...wzBaru(), targetId: l.id, posisi: l.judul, perusahaan: l.perusahaan, lokasi: l.lokasiKerja, kontak: l.kontak, retensi: l.retensi, tenggat: l.tenggat };
+      wz = { ...wzBaru(), targetId: l.id, posisi: l.judul, perusahaan: l.perusahaan, logo: l.logo || '', lokasi: l.lokasiKerja, kontak: l.kontak, retensi: l.retensi, tenggat: l.tenggat };
       wzGen();
       render();
     },
@@ -946,6 +989,10 @@
       try { await C.signIn(); showBanner(''); await bootCloud(); } catch (e) {
         showBanner(e && e.code === 'auth/popup-blocked' ? 'Jendela login diblokir browser. Izinkan popup untuk situs ini, lalu coba lagi.' : 'Gagal masuk. Coba lagi.');
       }
+    },
+    'logo-del'() {
+      if (wz) wz.logo = ''; else { current().logo = ''; save(); }
+      render();
     },
     async logout() {
       if (saveTimer) {

@@ -128,10 +128,13 @@
   }
 
   // Berkas cadangan bisa berasal dari luar, jadi bentuknya diperiksa sebelum dipakai.
+  // Logo disimpan sebagai gambar kecil di dokumen lowongan. Hanya bitmap: SVG bisa membawa skrip.
+  const logoSah = s => typeof s === 'string' && s.length <= 60000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(s);
+
   function validBackup(d) {
     const idSah = x => typeof x === 'string' && /^[\w-]{1,64}$/.test(x); // id dipakai sebagai jalur dokumen
     return !!d && Array.isArray(d.lowongan) && Array.isArray(d.kandidat) &&
-      d.lowongan.every(l => l && idSah(l.id) && typeof l.judul === 'string' && Array.isArray(l.tahapan) && l.criteria) &&
+      d.lowongan.every(l => l && idSah(l.id) && typeof l.judul === 'string' && Array.isArray(l.tahapan) && l.criteria && (!l.logo || logoSah(l.logo))) &&
       d.kandidat.every(k => k && idSah(k.id) && idSah(k.lowonganId));
   }
 
@@ -187,7 +190,7 @@
     const clean = v => JSON.parse(JSON.stringify(v));
     db.lowongan.forEach(l => {
       out.set(`lowongan/${l.id}`, clean({
-        judul: l.judul, perusahaan: l.perusahaan || '', lokasiKerja: l.lokasiKerja || '', tenggat: l.tenggat || '',
+        judul: l.judul, perusahaan: l.perusahaan || '', logo: l.logo || '', lokasiKerja: l.lokasiKerja || '', tenggat: l.tenggat || '',
         tutupPada: l.tenggat ? `${l.tenggat}T23:59:59+07:00` : '2100-01-01T00:00:00+07:00',
         deskripsi: l.deskripsi || '', persyaratan: l.persyaratan || '', status: l.status || 'buka',
         kontak: l.kontak || '', retensi: l.retensi || '', contoh: !!l.contoh,
@@ -237,5 +240,5 @@
     return new TextDecoder().decode(data);
   }
 
-  root.Rekrutmen = { lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
+  root.Rekrutmen = { logoSah, lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
 })(typeof window !== 'undefined' ? window : globalThis);

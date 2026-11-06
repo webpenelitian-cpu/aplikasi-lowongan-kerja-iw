@@ -18,7 +18,7 @@
   const setTitle = t => { document.title = t ? `${t} | Lowongan Kerja` : 'Lowongan Kerja'; };
 
   const inisial = s => (String(s || '').replace(/\b(PT|CV|Tbk)\b\.?/gi, '').match(/[\p{L}\p{N}]+/gu) || ['L']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
-  const logo = l => `<span class="logo" aria-hidden="true">${esc(inisial(l.perusahaan || l.judul))}</span>`;
+  const logo = l => (R.logoSah(l.logo) ? `<span class="logo logo-img" aria-hidden="true"><img src="${esc(l.logo)}" alt=""></span>` : `<span class="logo" aria-hidden="true">${esc(inisial(l.perusahaan || l.judul))}</span>`);
   const cuplikan = s => {
     const t = String(s || '').split('\n').map(x => x.replace(/^\s*[-•*]\s*/, '').trim()).filter(x => x && !x.endsWith(':')).join('. ').replace(/\.\. /g, '. ');
     return t.length > 170 ? `${t.slice(0, 170).replace(/\s\S*$/, '').replace(/[.,;:]+$/, '')}...` : t;
@@ -113,7 +113,7 @@
         : !siap(l) ? '<div class="empty">Pendaftaran untuk lowongan ini belum dibuka.</div>' : '';
     const bisa = !closed;
     app.innerHTML = `<a class="back" href="#/">Semua lowongan</a>
-      <section class="job-top">${logo(l)}<div class="job-top-in"><div class="job-head"><h2>${esc(l.judul)}</h2>${badgeOf(l)}</div><p class="note">${esc(meta(l))}</p></div>
+      <section class="job-top">${logo(l)}<div class="job-top-in"><div class="job-head">${badgeOf(l)}<h2>${esc(l.judul)}</h2></div><p class="note">${esc(meta(l))}</p></div>
         ${bisa ? '<button type="button" id="to-apply">Lamar sekarang</button>' : ''}</section>
       <div class="two"><section class="panel">
         ${l.deskripsi ? `<h3>Deskripsi pekerjaan</h3><p class="pre">${esc(l.deskripsi)}</p>` : ''}
