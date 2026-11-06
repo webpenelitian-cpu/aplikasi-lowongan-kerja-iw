@@ -82,6 +82,10 @@
     await initDb();
     await F.setDoc(F.doc(db, 'lamaran', kode), { ...data, dibuat: F.serverTimestamp() });
   }
+  async function kirimSurvei(kode, data) {
+    await initDb();
+    await F.setDoc(F.doc(db, 'survei', kode), { ...data, dibuat: F.serverTimestamp() });
+  }
   async function getHasil(kode) {
     await initDb();
     const s = await F.getDoc(F.doc(db, 'hasil', kode));
@@ -90,8 +94,15 @@
 
   // ---- Aplikasi HR ----
   async function loadAll() {
-    const [lowongan, lam] = await Promise.all([muatLowongan(), F.getDocs(F.collection(db, 'lamaran'))]);
-    return { lowongan, kandidat: rows(lam).map(lamaranKe) };
+    const [lowongan, lam, survei] = await Promise.all([muatLowongan(), F.getDocs(F.collection(db, 'lamaran')), muatSurvei()]);
+    return { lowongan, kandidat: rows(lam).map(lamaranKe), survei };
+  }
+
+  // Id survei adalah kode pelamar, jadi tidak dibawa ke tampilan HR. Survei tidak boleh menggagalkan pemuatan data utama.
+  async function muatSurvei() {
+    try {
+      return rows(await F.getDocs(F.collection(db, 'survei'))).map(({ id, dibuat, ...s }) => s);
+    } catch (e) { return []; }
   }
 
   async function muatLowongan() {
@@ -137,5 +148,5 @@
     }
   }
 
-  root.Cloud = { newLamaran, ubahLamaran, muatLowongan, email, reserveNomor, enabled, initHr, signIn, signOut, isAdmin, listLowongan, getLowongan, listPengumuman, submitLamaran, getHasil, loadAll, apply };
+  root.Cloud = { kirimSurvei, muatSurvei, newLamaran, ubahLamaran, muatLowongan, email, reserveNomor, enabled, initHr, signIn, signOut, isAdmin, listLowongan, getLowongan, listPengumuman, submitLamaran, getHasil, loadAll, apply };
 })(window);

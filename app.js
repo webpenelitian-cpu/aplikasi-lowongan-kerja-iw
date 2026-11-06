@@ -515,6 +515,19 @@
       <p class="hint">Dibandingkan dari ${m.n} peserta pada tahap ${esc(t ? t.nama : '-')}. Keputusan HR bisa terpengaruh rekomendasi, jadi angka ini bahan tinjauan, bukan bukti keakuratan. Periksa berkala, terutama bila ada kelompok yang sering tersaring.</p></section>`;
   }
 
+  function saluranHtml(l, s) {
+    const t = l.tahapan[0], pakai = R.SUMBER.concat([['', 'Tidak diisi']]);
+    const rows = pakai.map(([k, label]) => { const x = s.list.filter(c => (c.sumber || '') === k); return { label, n: x.length, sub: t ? `Lolos ${t.nama}: ${x.filter(c => R.statusOf(c, t) === 'lolos').length}` : '' }; }).filter(r => r.n);
+    return `<section class="panel"><h3>Asal pelamar</h3>${bars(rows, 'Belum ada pelamar.')}<p class="hint">Bandingkan jumlah pelamar dengan yang lolos untuk menilai saluran mana yang perlu dipertahankan.</p></section>`;
+  }
+
+  function surveiHtml(l) {
+    const r = R.ringkasSurvei((db.survei || []).filter(x => x.lowonganId === l.id));
+    return `<section class="panel"><h3>Survei pengalaman pelamar</h3>${r.n ? nilai([['Nilai rata-rata', `${S.idn(Math.round(r.rata * 10) / 10)} dari 5`], ['Informasi jelas', persen(r.jelas)], ['Jumlah jawaban', r.n]])
+      : '<p class="note">Belum ada jawaban. Survei tampil setelah hasil pelamar diterbitkan.</p>'}${r.komentar.length ? `<ul class="saran">${r.komentar.map(k => `<li>${esc(k)}</li>`).join('')}</ul>` : ''}
+      ${r.n && r.n < 5 ? '<p class="hint">Jawaban masih sedikit, jadi belum mewakili.</p>' : ''}</section>`;
+  }
+
   const PREBOARDING = [['surat', 'Surat selamat datang'], ['agenda', 'Agenda hari dan minggu pertama'], ['profil', 'Visi, misi, nilai, dan struktur organisasi'], ['aturan', 'Kode etik, kerahasiaan, serta keselamatan dan kesehatan kerja'], ['kontak', 'Kontak yang bisa dihubungi untuk bertanya'], ['dokumen', 'Pemberitahuan dokumen yang perlu disiapkan'], ['atasan', 'Pertemuan dengan atasan dan tim'], ['admin', 'Pemberitahuan ke bagian penggajian dan benefit'], ['alat', 'Perlengkapan kerja dan akses sistem']];
   function preboardingHtml(l) {
     const p = l.preboarding || {};
@@ -532,6 +545,7 @@
         <ul class="ready">${kesiapan(l).map(([t, ok]) => `<li><span class="badge ${ok ? 'b-lolos' : 'b-tidak'}">${ok ? 'Siap' : 'Belum'}</span><span>${esc(t)}</span></li>`).join('')}</ul></section></div>
       <div class="grid2">${pengalamanHtml(R.kabarPelamar(l, s.list))}${metrikHtml(l, s)}</div>
       ${s.lolos ? preboardingHtml(l) : ''}
+      <div class="grid2">${saluranHtml(l, s)}${surveiHtml(l)}</div>
       <div class="grid2">${kecocokanHtml(l, s)}
       <section class="panel"><h3>Tinjauan dan pembelajaran</h3><div class="field"><label for="i-belajar">Catatan untuk rekrutmen berikutnya</label><textarea id="i-belajar" rows="6" placeholder="Bagian mana yang sesuai rencana dan mana yang tidak? Apa masukan pemangku kepentingan? Saluran dan cara penilaian apa yang perlu dipertahankan atau diubah?" data-l="pembelajaran">${esc(l.pembelajaran)}</textarea><span class="hint">Hanya untuk tim HR. Hindari menulis nama pelamar di sini.</span></div></section></div>
     </div>`;
@@ -1175,8 +1189,9 @@
     }
     const sejak = Math.max(0, ...db.kandidat.map(k => k.dibuatMs || 0));
     const sejakUbah = Math.max(0, ...db.kandidat.map(k => k.diubahMs || 0));
-    const [lowongan, masuk, ubah] = await Promise.all([C.muatLowongan(), C.newLamaran(sejak), C.ubahLamaran(sejakUbah)]);
+    const [lowongan, masuk, ubah, survei] = await Promise.all([C.muatLowongan(), C.newLamaran(sejak), C.ubahLamaran(sejakUbah), C.muatSurvei()]);
     db.lowongan = lengkapi(lowongan);
+    db.survei = survei;
     const baru = masuk.filter(k => !db.kandidat.some(x => x.id === k.id));
     db.kandidat.push(...baru);
     ubah.forEach(u => { const k = db.kandidat.find(x => x.id === u.id); if (k) Object.assign(k, u); else if (u.lowonganId) db.kandidat.push(u); });

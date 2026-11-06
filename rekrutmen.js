@@ -192,7 +192,7 @@
       if (last < 0) { sets.push(hasilAwal(k, l)); return; }
       const t = l.tahapan[last], status = statusOf(k, t);
       sets.push([`hasil/${k.id}`, {
-        nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', kontak: l.kontak || '', status, tahap: t.nama,
+        nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', lowonganId: l.id, kontak: l.kontak || '', status, tahap: t.nama,
         riwayat: l.tahapan.slice(0, last + 1).map(x => ({ nama: x.nama, status: statusOf(k, x) })),
         alur: l.tahapan.map(x => x.nama), tanggal: opts.tanggal || '',
         pesan: status === 'lolos' ? tindakOf(t) : '',
@@ -213,6 +213,14 @@
     return out;
   }
 
+  const SUMBER = [['portal', 'Situs lowongan perusahaan ini'], ['situs', 'Situs lowongan lain'], ['sosial', 'Media sosial'], ['referensi', 'Referensi karyawan atau kenalan'], ['kampus', 'Kampus atau komunitas'], ['lain', 'Lainnya']];
+
+  // Ringkasan survei tanpa identitas: hanya angka dan komentar.
+  function ringkasSurvei(list) {
+    const n = list.length;
+    return { n, rata: n ? list.reduce((a, s) => a + s.nilai, 0) / n : null, jelas: n ? list.filter(s => s.jelas === 'ya').length / n : null, komentar: list.map(s => s.komentar).filter(Boolean) };
+  }
+
   // Kecocokan rekomendasi screening dengan keputusan HR. Lolos dan Pertimbangkan dihitung positif; Perlu cek manual tidak dihitung.
   function kinerjaScreening(rows) {
     const x = rows.filter(r => ['lolos', 'pertimbangkan', 'tidak'].includes(r.rekomendasi) && ['lolos', 'tidak'].includes(r.hasil));
@@ -231,7 +239,7 @@
     });
   }
 
-  const hasilAwal = (k, l) => [`hasil/${k.id}`, { nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', kontak: l.kontak || '', status: 'proses', tahap: '', riwayat: [], alur: (l.tahapan || []).map(t => t.nama), pesan: '' }];
+  const hasilAwal = (k, l) => [`hasil/${k.id}`, { nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', lowonganId: l.id, kontak: l.kontak || '', status: 'proses', tahap: '', riwayat: [], alur: (l.tahapan || []).map(t => t.nama), pesan: '' }];
 
   // Memecah data aplikasi menjadi dokumen Firestore. Bagian publik dan bagian khusus HR sengaja dipisah.
   function docsFromDb(db) {
@@ -257,7 +265,7 @@
         lowonganId: k.lowonganId, nomor: k.nomor || '', fileName: k.fileName || '', size: k.size || 0, error: k.error || '',
         cvText: k.text === undefined ? null : k.text, tahap: k.tahap || {},
         nama: k.nama || '', email: k.email || '', telepon: k.telepon || '',
-        catatan: k.catatan || '', jejak: k.jejak || [], talentPool: !!k.talentPool,
+        catatan: k.catatan || '', jejak: k.jejak || [], talentPool: !!k.talentPool, sumber: k.sumber || '',
       }));
     });
     return out;
@@ -266,7 +274,7 @@
   // Dokumen turunan ikut dihapus agar tidak ada sisa data pelamar di bagian publik.
   function followDeletes(path, oldJson) {
     const [col, id] = path.split('/');
-    if (col === 'lamaran') return [`hasil/${id}`];
+    if (col === 'lamaran') return [`hasil/${id}`, `survei/${id}`];
     if (col === 'lowongan_hr') return Object.keys(JSON.parse(oldJson).terbit || {}).map(t => `pengumuman/${id}__${t}`);
     return [];
   }
@@ -291,5 +299,5 @@
     return new TextDecoder().decode(data);
   }
 
-  root.Rekrutmen = { kinerjaScreening, kabarPelamar, pesanPolos, pesanHtml, logoSah, lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
+  root.Rekrutmen = { SUMBER, ringkasSurvei, kinerjaScreening, kabarPelamar, pesanPolos, pesanHtml, logoSah, lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
 })(typeof window !== 'undefined' ? window : globalThis);

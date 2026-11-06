@@ -90,6 +90,7 @@
       ${fieldInput('a-nama', 'Nama lengkap', 'type="text" maxlength="100" autocomplete="name"')}
       ${fieldInput('a-email', 'Email', 'type="email" maxlength="120" autocomplete="email"')}
       ${fieldInput('a-telp', 'Nomor telepon', 'type="tel" maxlength="20" autocomplete="tel"')}
+      <div class="field"><label for="a-sumber">Dari mana Anda mengetahui lowongan ini? (opsional)</label><select id="a-sumber"><option value="">Pilih</option>${R.SUMBER.map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('')}</select></div>
       <div class="field"><label for="a-cv">File CV <span class="req" aria-hidden="true">*</span></label><input id="a-cv" type="file" accept=".pdf,.docx,.txt" required aria-required="true" aria-describedby="a-cv-h a-err">
         <span class="hint" id="a-cv-h">PDF, DOCX, atau TXT, maksimal 15 MB. CV hasil scan atau foto tidak bisa dibaca.</span></div>
       <div class="field"><label class="consent"><input id="a-setuju" type="checkbox" aria-describedby="a-err"> <span>Saya menyetujui ${esc(l.perusahaan)} memproses data pribadi dan isi CV saya untuk seleksi ${esc(l.judul)}, dan menyimpannya paling lama ${esc(l.retensi)}. Saya dapat meminta data saya diakses, diperbaiki, atau dihapus melalui ${esc(l.kontak)}.</span></label>
@@ -165,7 +166,7 @@
     if (text.replace(/\s/g, '').length < 80) { fail('Teks CV tidak terbaca, kemungkinan hasil scan atau foto. Unggah CV yang teksnya bisa dipilih.', 'a-cv'); return; }
     const kode = R.buatKode();
     try {
-      await C.submitLamaran(kode, { lowonganId: l.id, nama: v.nama, email: v.email, telepon: v.telepon, fileName: v.file.name.slice(0, 200), size: v.file.size, cvText: text.slice(0, 100000), persetujuan: true, talentPool: $('a-pool').checked });
+      await C.submitLamaran(kode, { lowonganId: l.id, nama: v.nama, email: v.email, telepon: v.telepon, fileName: v.file.name.slice(0, 200), size: v.file.size, cvText: text.slice(0, 100000), persetujuan: true, talentPool: $('a-pool').checked, ...(val('a-sumber') ? { sumber: val('a-sumber') } : {}) });
       try { localStorage.setItem(kunciKirim(l.id), String(Date.now())); } catch (e) { /* mode privat */ }
       success(l, kode);
     } catch (e) {
@@ -211,6 +212,7 @@
         const hasil = out.querySelector('.hasil');
         hasil.focus({ preventScroll: true });
         window.scrollTo(0, 0);
+        pasangSurvei(kode, h);
         document.getElementById('c-lagi').addEventListener('click', () => {
           out.innerHTML = ''; out.setAttribute('role', 'status'); form.hidden = false; input.focus();
         });
@@ -218,11 +220,42 @@
     });
   }
 
+  const kunciSurvei = id => `survei-terisi-${id}`;
+  const sudahSurvei = id => { try { return !!localStorage.getItem(kunciSurvei(id)); } catch (e) { return false; } };
+  function surveiHtml() {
+    return `<form id="survei" class="hasil-tindak" novalidate><h3>Bagaimana pengalaman Anda?</h3>
+      <p class="hint">Opsional. Jawaban Anda tidak memengaruhi hasil seleksi, dan tim HR melihatnya tanpa nama atau nomor peserta.</p>
+      <fieldset class="nilai"><legend>Nilai proses seleksi ini</legend><div class="nilai-isi">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="s-nilai" value="${n}"><span>${n}</span></label>`).join('')}</div><span class="hint">1 sangat kurang, 5 sangat baik</span></fieldset>
+      <div class="field"><label for="s-jelas">Apakah informasi tiap tahap jelas?</label><select id="s-jelas"><option value="ya">Ya</option><option value="sebagian">Sebagian</option><option value="tidak">Tidak</option></select></div>
+      <div class="field"><label for="s-komentar">Saran (opsional)</label><textarea id="s-komentar" rows="3" maxlength="500" placeholder="Hindari menulis nama atau data pribadi"></textarea></div>
+      <p id="s-note" class="note" role="status" hidden></p><button type="submit" class="ghost start">Kirim masukan</button></form>`;
+  }
+  function pasangSurvei(kode, h) {
+    const form = document.getElementById('survei');
+    if (!form) return;
+    const note = document.getElementById('s-note'), btn = form.querySelector('button');
+    const selesai = () => { form.innerHTML = '<h3>Terima kasih</h3><p class="note">Masukan Anda sudah kami terima.</p>'; try { localStorage.setItem(kunciSurvei(h.lowonganId), '1'); } catch (e) { /* mode privat */ } };
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const pilih = form.querySelector('input[name=s-nilai]:checked');
+      if (!pilih) { note.hidden = false; note.textContent = 'Pilih nilai 1 sampai 5 terlebih dahulu.'; return; }
+      const komentar = document.getElementById('s-komentar').value.trim().slice(0, 500);
+      btn.disabled = true;
+      try {
+        await C.kirimSurvei(kode, { lowonganId: h.lowonganId, nilai: +pilih.value, jelas: document.getElementById('s-jelas').value, ...(komentar ? { komentar } : {}) });
+        selesai();
+      } catch (err) {
+        if (err && err.code === 'permission-denied') { selesai(); return; } // kode ini sudah pernah mengirim
+        btn.disabled = false; note.hidden = false; note.textContent = 'Masukan belum terkirim. Coba lagi.';
+      }
+    });
+  }
+
   function privasi() {
     setTitle('Pemberitahuan privasi');
     app.innerHTML = `<section class="panel privasi"><h2>Pemberitahuan privasi pelamar</h2>
       <p>Pemberitahuan ini menjelaskan cara data lamaran Anda diproses. Pengendali data adalah perusahaan yang tercantum pada lowongan yang Anda lamar.</p>
-      <h3>Data yang dikumpulkan</h3><ul><li>Nama, email, dan nomor telepon yang Anda isi.</li><li>Teks dari CV Anda. File aslinya tidak disimpan.</li><li>Hasil tiap tahap seleksi dan catatan penilaian.</li></ul>
+      <h3>Data yang dikumpulkan</h3><ul><li>Nama, email, dan nomor telepon yang Anda isi.</li><li>Teks dari CV Anda. File aslinya tidak disimpan.</li><li>Hasil tiap tahap seleksi dan catatan penilaian.</li><li>Sumber informasi lowongan dan jawaban survei, bila Anda mengisinya. Survei ditampilkan kepada tim HR tanpa nama atau nomor peserta.</li></ul>
       <h3>Tujuan dan dasar pemrosesan</h3><p>Data dipakai untuk menilai lamaran dan menghubungi Anda selama seleksi, berdasarkan persetujuan yang Anda berikan saat melamar. Bila Anda memilih talent pool, data juga dipakai untuk menawarkan lowongan lain yang sesuai.</p>
       <h3>Penilaian otomatis</h3><p>CV dicocokkan otomatis dengan persyaratan jabatan sebagai rekomendasi awal. Rekomendasi itu tidak menjadi keputusan. Tim HR memeriksa dan memutuskan, dan Anda dapat mengajukan keberatan.</p>
       <h3>Cara kerja penilaian otomatis</h3><p>Aplikasi membaca teks CV lalu mencocokkannya dengan ketentuan yang ditetapkan tim HR untuk lowongan itu, seperti pendidikan, pengalaman, dan keahlian. Pencocokan memakai aturan yang tetap dan tidak memakai pembelajaran mesin.</p>
@@ -269,6 +302,7 @@
       <div class="hasil-status" data-s="${jenis}"><span class="ikon" aria-hidden="true"></span><div><h3>${kepala[0]}</h3>${kepala[1] ? `<p>${kepala[1]}</p>` : ''}</div></div>
       ${h.pesan ? `<div class="hasil-tindak"><h3>Tindak lanjut</h3><p class="pre">${tautan(h.pesan)}</p></div>` : ''}
       ${langkah ? `<div class="hasil-alur"><div class="hasil-alur-top"><h3>Perjalanan seleksi</h3>${lengkap ? `<span class="note">${lolos} dari ${alur.length} tahap</span>` : ''}</div><ol class="linimasa">${langkah}</ol></div>` : ''}
+      ${h.lowonganId && h.status !== 'proses' && !sudahSurvei(h.lowonganId) ? surveiHtml() : ''}
       <div class="hasil-kaki"><button type="button" class="ghost" id="c-lagi">Cek kode lain</button><p class="hint">${h.kontak ? `Ada pertanyaan tentang hasil ini? Hubungi ${esc(h.kontak)}. ` : ''}Simpan kode lamaran Anda dan jangan bagikan kepada orang lain.</p></div>
     </section>`;
   }
