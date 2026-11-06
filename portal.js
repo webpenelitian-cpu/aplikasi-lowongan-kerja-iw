@@ -21,7 +21,7 @@
   const logo = l => `<span class="logo" aria-hidden="true">${esc(inisial(l.perusahaan || l.judul))}</span>`;
   const cuplikan = s => {
     const t = String(s || '').split('\n').map(x => x.replace(/^\s*[-•*]\s*/, '').trim()).filter(x => x && !x.endsWith(':')).join('. ').replace(/\.\. /g, '. ');
-    return t.length > 170 ? `${t.slice(0, 170).replace(/\s\S*$/, '')}...` : t;
+    return t.length > 170 ? `${t.slice(0, 170).replace(/\s\S*$/, '').replace(/[.,;:]+$/, '')}...` : t;
   };
 
   let semua = [], dimuat = 0;
