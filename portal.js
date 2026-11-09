@@ -1,6 +1,8 @@
 // Portal publik untuk pelamar: daftar lowongan, formulir lamaran, cek hasil dengan kode, dan pengumuman.
 (function () {
   'use strict';
+  // Tidak boleh tampil di dalam bingkai situs lain (mencegah clickjacking). GitHub Pages tidak bisa mengirim header X-Frame-Options.
+  if (window.top !== window.self) { document.documentElement.innerHTML = ''; return; }
   const R = window.Rekrutmen, C = window.Cloud;
   const app = document.getElementById('app');
   const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -271,7 +273,7 @@
     return String(s === null || s === undefined ? '' : s).split(/(https:\/\/[^\s<>"']+)/).map((p, i) => {
       if (i % 2 === 0) return esc(p);
       const url = p.replace(/[.,;:!?)]+$/, ''), sisa = p.slice(url.length);
-      let host = '';
+      let host;
       try { host = new URL(url).hostname; } catch (e) { return esc(p); }
       const peta = /(^|\.)maps\.app\.goo\.gl$|^maps\.google\.|^(www\.)?google\.[a-z.]+$/.test(host) && /maps/.test(url);
       return `<a class="${peta ? 'linkbtn' : ''}" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${peta ? 'Buka lokasi di Google Maps' : esc(url)}</a>${peta ? '' : esc(sisa)}`;

@@ -2,6 +2,8 @@
 // aturan tahapan dan pengumuman ada di rekrutmen.js.
 (function () {
   'use strict';
+  // Tidak boleh tampil di dalam bingkai situs lain (mencegah clickjacking). GitHub Pages tidak bisa mengirim header X-Frame-Options.
+  if (window.top !== window.self) { document.documentElement.innerHTML = ''; return; }
   const S = window.Screening, R = window.Rekrutmen, C = window.Cloud, TL = window.TemplatLowongan;
   const $ = id => document.getElementById(id);
   const app = $('app');
@@ -715,7 +717,7 @@
   };
 
   async function copyText(text, noteText, html) {
-    let ok = false;
+    let ok;
     try {
       if (html && window.ClipboardItem) {
         await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
@@ -757,7 +759,7 @@
         (k.error ? [k.error] : r ? r.alasan : []).join(' | ')].concat(l.tahapan.map(t => label[R.statusOf(k, t)] || ''), [R.progressLabel(R.progress(k, l.tahapan)), k.talentPool ? 'Ya' : '', k.catatan || '']);
     });
     const slug = l.judul.trim().replace(/[^\p{L}\p{N}]+/gu, '-');
-    download(`kandidat-${slug}.csv`, '﻿' + [head].concat(rows).map(r => r.map(csvCell).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
+    download(`kandidat-${slug}.csv`, '\uFEFF' + [head].concat(rows).map(r => r.map(csvCell).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
   }
 
   // ---- Render ----
