@@ -42,8 +42,8 @@
   const PROTECTED = /\b(jenis kelamin|gender|pria|wanita|laki-laki|perempuan|agama|islam|kristen|katolik|hindu|buddha|konghucu|suku|etnis|ras|status (pernikahan|perkawinan)|menikah|lajang|usia|umur|penampilan menarik|golongan darah|tinggi badan|berat badan)\b/i;
 
   const normalize = s => String(s || '')
-    .normalize('NFKD').replace(/[̀-ͯ]/g, '')
-    .replace(/[‐-―−]/g, '-').replace(/ /g, ' ')
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\u00a0/g, ' ')
     .replace(/\r\n?/g, '\n');
 
   const parseList = str => {

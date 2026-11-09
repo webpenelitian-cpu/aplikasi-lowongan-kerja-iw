@@ -182,7 +182,7 @@
   }
 
   function pengalamanHtml(k) {
-    return `<section class="panel"><h3>Pengalaman kandidat</h3><p class="hint">Semua pelamar perlu menerima kabar, termasuk yang tidak diterima.</p>
+    return `<section class="panel"><h2>Pengalaman kandidat</h2><p class="hint">Semua pelamar perlu menerima kabar, termasuk yang tidak diterima.</p>
       ${bars([{ label: 'Sudah menerima kabar', n: k.dikabari }, { label: 'Diputuskan, belum dikabarkan', n: k.tertunda }, { label: 'Belum diputuskan', n: k.menunggu }], 'Belum ada pelamar.')}</section>`;
   }
 
@@ -199,13 +199,13 @@
     const rek = Object.keys(REC).map(k => ({ label: REC[k], n: ks.filter(([c, l]) => recOf(c, l) === k).length }));
     const todo = tindakan();
     const kabar = ls.map(l => R.kabarPelamar(l, pelamar(l.id))).reduce((a, x) => ({ dikabari: a.dikabari + x.dikabari, tertunda: a.tertunda + x.tertunda, menunggu: a.menunggu + x.menunggu }), { dikabari: 0, tertunda: 0, menunggu: 0 });
-    return `<div class="stack"><div class="page-head"><h2>Dasbor rekrutmen</h2><button type="button" data-act="page" data-p="lowongan">Buat lowongan</button></div>
+    return `<div class="stack"><div class="page-head"><h1>Dasbor rekrutmen</h1><button type="button" data-act="page" data-p="lowongan">Buat lowongan</button></div>
       ${kpi('k6', [[ls.filter(l => l.status === 'buka').length, 'Lowongan dibuka'], [ls.filter(l => l.status === 'draf').length, 'Draf'], [ks.length, 'Total pelamar'], [n('proses'), 'Dalam proses'], [n('lolos'), 'Lolos semua tahap'], [ks.filter(([k]) => k.talentPool).length, 'Talent pool']])}
-      <div class="grid2"><section class="panel"><h3>Saringan rekrutmen</h3>${bars(saringan, 'Belum ada pelamar pada tahap mana pun.')}</section>
-      <section class="panel"><h3>Rekomendasi screening</h3>${bars(rek, 'Belum ada CV yang dinilai.')}</section></div>
+      <div class="grid2"><section class="panel"><h2>Saringan rekrutmen</h2>${bars(saringan, 'Belum ada pelamar pada tahap mana pun.')}</section>
+      <section class="panel"><h2>Rekomendasi screening</h2>${bars(rek, 'Belum ada CV yang dinilai.')}</section></div>
       ${cloudOn ? pengalamanHtml(kabar) : ''}
-      <section class="panel"><h3>Perlu tindakan</h3>${todo.length ? `<ul class="rows">${todo.slice(0, 8).map(([l, t]) => `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${esc(t)}</span></button></li>`).join('')}</ul>${todo.length > 8 ? `<p class="note">Dan ${todo.length - 8} hal lainnya.</p>` : ''}` : '<p class="note">Tidak ada yang perlu ditindaklanjuti.</p>'}</section>
-      <section class="panel"><h3>Lowongan</h3>${ls.length ? `<ul class="rows">${ls.map(l => { const s = stat(l); return `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${s.total} pelamar · ${s.proses} proses · ${s.lolos} lolos · ${s.gugur} tidak lolos</span>${badgeL(l)}</button></li>`; }).join('')}</ul>` : '<p class="note">Belum ada lowongan.</p>'}</section></div>`;
+      <section class="panel"><h2>Perlu tindakan</h2>${todo.length ? `<ul class="rows">${todo.slice(0, 8).map(([l, t]) => `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${esc(t)}</span></button></li>`).join('')}</ul>${todo.length > 8 ? `<p class="note">Dan ${todo.length - 8} hal lainnya.</p>` : ''}` : '<p class="note">Tidak ada yang perlu ditindaklanjuti.</p>'}</section>
+      <section class="panel"><h2>Lowongan</h2>${ls.length ? `<ul class="rows">${ls.map(l => { const s = stat(l); return `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${s.total} pelamar · ${s.proses} proses · ${s.lolos} lolos · ${s.gugur} tidak lolos</span>${badgeL(l)}</button></li>`; }).join('')}</ul>` : '<p class="note">Belum ada lowongan.</p>'}</section></div>`;
   }
 
   function lowonganHtml() {
@@ -218,7 +218,7 @@
         <span class="stats"><span><b>${s.total}</b> pelamar</span><span><b>${s.proses}</b> dalam proses</span><span><b>${s.lolos}</b> lolos</span><span><b>${s.gugur}</b> tidak lolos</span></span>
       </button><button type="button" class="ghost danger job-del" data-act="del-job" data-id="${esc(l.id)}" aria-label="Hapus lowongan ${esc(l.judul)}">Hapus</button></div>`;
     }).join('');
-    return `<div class="stack"><h2>Lowongan</h2>
+    return `<div class="stack"><h1>Lowongan</h1>
       <form class="new-job cta-form" data-form="new">
         <label for="new-judul">Tulis posisi yang dicari</label>
         <p class="note">Syarat dan ketentuan tersusun otomatis dari posisi ini, lalu Anda menambah atau mengurangi.</p>
@@ -232,10 +232,10 @@
 
   function poolHtml() {
     const p = view.pool = view.pool || { q: '', lv: '', th: '', l: '' };
-    return `<div class="stack"><div class="page-head"><h2>Talent pool</h2><button type="button" class="ghost" data-act="pool-csv">Unduh CSV</button></div>
+    return `<div class="stack"><div class="page-head"><h1>Talent pool</h1><button type="button" class="ghost" data-act="pool-csv">Unduh CSV</button></div>
       <p class="note">Berisi pelamar yang menyetujui ditawari lowongan lain. Masa simpan mengikuti persetujuan mereka, dan data terhapus bersama lowongan asalnya.</p>
       <div id="pool-ring"></div>
-      <section class="panel"><h3>Cari dan cocokkan</h3><div class="filters4">
+      <section class="panel"><h2>Cari dan cocokkan</h2><div class="filters4">
         <div><label for="p-q">Kata kunci di CV</label><input id="p-q" type="search" value="${esc(p.q)}" data-pool="q" placeholder="AutoCAD, Teknik Sipil"></div>
         <div><label for="p-lv">Pendidikan minimal</label><select id="p-lv" data-pool="lv"><option value="">Semua</option>${S.LEVELS.map(x => `<option value="${x.k}"${p.lv === x.k ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>
         <div><label for="p-th">Pengalaman minimal (tahun)</label><input id="p-th" type="number" min="0" value="${esc(p.th)}" data-pool="th"></div>
@@ -267,7 +267,7 @@
     const band = [['0-2 tahun', 0, 2], ['3-5 tahun', 2.01, 5], ['6-10 tahun', 5.01, 10], ['Di atas 10 tahun', 10.01, 99]].map(([label, a, b]) => ({ label, n: fs.filter(f => f.exp.years !== null && f.exp.years >= a && f.exp.years <= b).length }));
     const yrs = fs.map(f => f.exp.years).filter(y => y !== null);
     $('pool-ring').innerHTML = `${kpi('k3', [[semua.length, 'Anggota talent pool'], [yrs.length ? S.idn(Math.round(yrs.reduce((a, b) => a + b, 0) / yrs.length * 10) / 10) : '-', 'Rata-rata pengalaman (tahun)'], [rows.length, 'Sesuai saringan']])}
-      <div class="grid2 mt"><section class="panel"><h3>Pendidikan</h3>${bars(lv, 'Belum ada anggota.')}</section><section class="panel"><h3>Pengalaman</h3>${bars(band, 'Belum ada anggota.')}</section></div>`;
+      <div class="grid2 mt"><section class="panel"><h2>Pendidikan</h2>${bars(lv, 'Belum ada anggota.')}</section><section class="panel"><h2>Pengalaman</h2>${bars(band, 'Belum ada anggota.')}</section></div>`;
     box.innerHTML = rows.length ? rows.map(({ k, f, skor }) => {
       const asal = db.lowongan.find(l => l.id === k.lowonganId), lvl = S.levelOf(f.level);
       return `<article class="pool-row"><div class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)} · Melamar ${esc(asal.judul)} · ${esc(R.progressLabel(R.progress(k, asal.tahapan)))}</small><small>${esc([lvl && lvl.label, f.exp.years !== null && f.exp.years !== undefined ? `Sekitar ${S.idn(f.exp.years)} tahun` : ''].filter(Boolean).join(' · '))}</small></div>
@@ -286,7 +286,7 @@
   function detailHtml(l) {
     return `<div class="shell"><aside class="side noprint">
       <button type="button" class="back" data-act="home" data-p="lowongan">Semua lowongan</button>
-      <div class="detail-head"><div class="detail-top"><h2>${esc(l.judul)}</h2><span id="simpan" class="simpan" data-s="${jenisSimpan(statusSimpan)}" aria-hidden="true">${esc(statusSimpan.split(',')[0])}</span></div><span id="head-count" class="note">${pelamar(l.id).length} pelamar</span></div>
+      <div class="detail-head"><div class="detail-top"><h1>${esc(l.judul)}</h1><span id="simpan" class="simpan" data-s="${jenisSimpan(statusSimpan)}" aria-hidden="true">${esc(statusSimpan.split(',')[0])}</span></div><span id="head-count" class="note">${pelamar(l.id).length} pelamar</span></div>
       <nav class="tabs" aria-label="Bagian lowongan">${TABS.map(([k, label]) => `<button type="button" data-act="tab" data-tab="${k}"${view.tab === k ? ' aria-current="page"' : ''}>${label}</button>`).join('')}<button type="button" class="danger" data-act="del-job" data-id="${esc(l.id)}">Hapus lowongan</button></nav>
     </aside>
     <div id="tab-body">${({ ringkasan: ringkasanHtml, ketentuan: ketentuanHtml, kandidat: kandidatHtml, tahapan: tahapanHtml, pengumuman: pengumumanHtml })[view.tab](l)}</div></div>`;
@@ -320,7 +320,7 @@
   function ketentuanHtml(l) {
     const c = l.criteria;
     return `<div class="two">
-      <section class="panel"><h3>Info lowongan</h3>
+      <section class="panel"><h2>Info lowongan</h2>
         <div class="field"><label for="i-judul">Nama posisi</label><input id="i-judul" type="text" value="${esc(l.judul)}" data-l="judul"></div>
         <div class="field"><label for="i-perusahaan">Perusahaan</label><input id="i-perusahaan" type="text" value="${esc(l.perusahaan)}" data-l="perusahaan"></div>
         ${logoField('i-logo', l.logo, l.perusahaan)}
@@ -349,7 +349,7 @@
           <span class="hint">Hanya untuk tim HR, tidak tampil di portal.</span>
         </fieldset>
       </section>
-      <section class="panel"><h3>Ketentuan screening</h3>
+      <section class="panel"><h2>Ketentuan screening</h2>
         <div id="criteria">${FIELDS.map(f => fieldHtml(l, f)).join('')}${c.tambahan.map(customHtml).join('')}
           <div class="field"><label for="f-ambang">Ambang skor lolos</label><input id="f-ambang" type="number" min="0" max="100" value="${esc(c.ambang)}" data-root="ambang"><span class="hint">Skor sampai 20 poin di bawah ambang masuk Pertimbangkan.</span></div></div>
         <button type="button" class="ghost start" data-act="custom-add">Tambah ketentuan lain</button>
@@ -389,7 +389,7 @@
         <span>PDF, DOCX, atau TXT. Bisa banyak file sekaligus.</span>
         <input id="file" type="file" multiple accept=".pdf,.docx,.txt" hidden>
       </div>
-      <div class="result-head"><h3>Hasil screening</h3><button type="button" class="ghost" data-act="csv"${pelamar(l.id).length ? '' : ' disabled'}>Unduh CSV</button></div>
+      <div class="result-head"><h2>Hasil screening</h2><button type="button" class="ghost" data-act="csv"${pelamar(l.id).length ? '' : ' disabled'}>Unduh CSV</button></div>
       <div id="filters" class="filters" role="group" aria-label="Saring rekomendasi"></div>
       <input id="search" type="search" class="search" placeholder="Cari nama atau kata di CV" aria-label="Cari kandidat" value="${esc(query)}">
       <p id="progress" class="note" role="status" hidden></p>
@@ -504,7 +504,7 @@
   function metrikHtml(l, s) {
     const posisi = +l.permintaanJumlah || 0, cocok = s.list.filter(k => ['lolos', 'pertimbangkan'].includes(recOf(k, l))).length;
     const hari = l.permintaanTanggal && l.terisiTanggal ? Math.round((new Date(l.terisiTanggal) - new Date(l.permintaanTanggal)) / 864e5) : null;
-    return `<section class="panel"><h3>Metrik rekrutmen</h3>${nilai([
+    return `<section class="panel"><h2>Metrik rekrutmen</h2>${nilai([
       ['Pelamar per posisi', posisi ? S.idn(Math.round(s.total / posisi * 10) / 10) : '-'],
       ['Direkomendasikan screening', s.total ? persen(cocok / s.total) : '-'],
       ['Masuk talent pool', s.total ? persen(s.list.filter(k => k.talentPool).length / s.total) : '-'],
@@ -514,19 +514,19 @@
 
   function kecocokanHtml(l, s) {
     const t = l.tahapan[0], m = R.kinerjaScreening(t ? s.list.map(k => ({ rekomendasi: recOf(k, l), hasil: R.statusOf(k, t) })) : []);
-    return `<section class="panel"><h3>Kecocokan screening dengan keputusan HR</h3>${m.n ? nilai([['Akurasi', persen(m.akurasi)], ['Presisi', persen(m.presisi)], ['Recall', persen(m.recall)], ['Skor F1', persen(m.f1)]]) : '<p class="note">Belum ada keputusan pada tahap pertama untuk dibandingkan.</p>'}
+    return `<section class="panel"><h2>Kecocokan screening dengan keputusan HR</h2>${m.n ? nilai([['Akurasi', persen(m.akurasi)], ['Presisi', persen(m.presisi)], ['Recall', persen(m.recall)], ['Skor F1', persen(m.f1)]]) : '<p class="note">Belum ada keputusan pada tahap pertama untuk dibandingkan.</p>'}
       <p class="hint">Dibandingkan dari ${m.n} peserta pada tahap ${esc(t ? t.nama : '-')}. Keputusan HR bisa terpengaruh rekomendasi, jadi angka ini bahan tinjauan, bukan bukti keakuratan. Periksa berkala, terutama bila ada kelompok yang sering tersaring.</p></section>`;
   }
 
   function saluranHtml(l, s) {
     const t = l.tahapan[0], pakai = R.SUMBER.concat([['', 'Tidak diisi']]);
     const rows = pakai.map(([k, label]) => { const x = s.list.filter(c => (c.sumber || '') === k); return { label, n: x.length, sub: t ? `Lolos ${t.nama}: ${x.filter(c => R.statusOf(c, t) === 'lolos').length}` : '' }; }).filter(r => r.n);
-    return `<section class="panel"><h3>Asal pelamar</h3>${bars(rows, 'Belum ada pelamar.')}<p class="hint">Bandingkan jumlah pelamar dengan yang lolos untuk menilai saluran mana yang perlu dipertahankan.</p></section>`;
+    return `<section class="panel"><h2>Asal pelamar</h2>${bars(rows, 'Belum ada pelamar.')}<p class="hint">Bandingkan jumlah pelamar dengan yang lolos untuk menilai saluran mana yang perlu dipertahankan.</p></section>`;
   }
 
   function surveiHtml(l) {
     const r = R.ringkasSurvei((db.survei || []).filter(x => x.lowonganId === l.id));
-    return `<section class="panel"><h3>Survei pengalaman pelamar</h3>${r.n ? nilai([['Nilai rata-rata', `${S.idn(Math.round(r.rata * 10) / 10)} dari 5`], ['Informasi jelas', persen(r.jelas)], ['Jumlah jawaban', r.n]])
+    return `<section class="panel"><h2>Survei pengalaman pelamar</h2>${r.n ? nilai([['Nilai rata-rata', `${S.idn(Math.round(r.rata * 10) / 10)} dari 5`], ['Informasi jelas', persen(r.jelas)], ['Jumlah jawaban', r.n]])
       : '<p class="note">Belum ada jawaban. Survei tampil setelah hasil pelamar diterbitkan.</p>'}${r.komentar.length ? `<ul class="saran">${r.komentar.map(k => `<li>${esc(k)}</li>`).join('')}</ul>` : ''}
       ${r.n && r.n < 5 ? '<p class="hint">Jawaban masih sedikit, jadi belum mewakili.</p>' : ''}</section>`;
   }
@@ -534,7 +534,7 @@
   const PREBOARDING = [['surat', 'Surat selamat datang'], ['agenda', 'Agenda hari dan minggu pertama'], ['profil', 'Visi, misi, nilai, dan struktur organisasi'], ['aturan', 'Kode etik, kerahasiaan, serta keselamatan dan kesehatan kerja'], ['kontak', 'Kontak yang bisa dihubungi untuk bertanya'], ['dokumen', 'Pemberitahuan dokumen yang perlu disiapkan'], ['atasan', 'Pertemuan dengan atasan dan tim'], ['admin', 'Pemberitahuan ke bagian penggajian dan benefit'], ['alat', 'Perlengkapan kerja dan akses sistem']];
   function preboardingHtml(l) {
     const p = l.preboarding || {};
-    return `<section class="panel"><h3>Persiapan bergabung</h3><p class="hint">Jaga komunikasi dengan calon pekerja sampai hari pertama.</p>
+    return `<section class="panel"><h2>Persiapan bergabung</h2><p class="hint">Jaga komunikasi dengan calon pekerja sampai hari pertama.</p>
       <ul class="cek2">${PREBOARDING.map(([k, t]) => `<li><label class="consent"><input type="checkbox" data-pb="${k}"${p[k] ? ' checked' : ''}> <span>${esc(t)}</span></label></li>`).join('')}</ul></section>`;
   }
 
@@ -543,21 +543,21 @@
     const f = R.funnel(s.list, l.tahapan).map(r => ({ label: r.tahap.nama, n: r.sampai, sub: `Lolos ${r.lolos} · Tidak ${r.tidak} · Menunggu ${r.menunggu}` }));
     return `<div class="stack">
       ${kpi('k6', [[s.total, 'Total pelamar'], [s.proses, 'Dalam proses'], [s.lolos, 'Lolos semua tahap'], [s.gugur, 'Tidak lolos'], [s.list.filter(k => k.talentPool).length, 'Talent pool'], [hari, 'Target hari seleksi']])}
-      <div class="grid-side"><section class="panel"><h3>Saringan tahap</h3>${bars(f, '', true)}</section>
-      <section class="panel"><h3>Kesiapan lowongan</h3>
+      <div class="grid-side"><section class="panel"><h2>Saringan tahap</h2>${bars(f, '', true)}</section>
+      <section class="panel"><h2>Kesiapan lowongan</h2>
         <ul class="ready">${kesiapan(l).map(([t, ok]) => `<li><span class="badge ${ok ? 'b-lolos' : 'b-tidak'}">${ok ? 'Siap' : 'Belum'}</span><span>${esc(t)}</span></li>`).join('')}</ul></section></div>
       <div class="grid2">${cloudOn ? pengalamanHtml(R.kabarPelamar(l, s.list)) : ''}${metrikHtml(l, s)}</div>
       ${s.lolos ? preboardingHtml(l) : ''}
       ${cloudOn ? `<div class="grid2">${saluranHtml(l, s)}${surveiHtml(l)}</div>` : ''}
       <div class="grid2">${kecocokanHtml(l, s)}
-      <section class="panel"><h3>Tinjauan dan pembelajaran</h3><div class="field"><label for="i-belajar">Catatan untuk rekrutmen berikutnya</label><textarea id="i-belajar" rows="6" placeholder="Bagian mana yang sesuai rencana dan mana yang tidak? Apa masukan pemangku kepentingan? Saluran dan cara penilaian apa yang perlu dipertahankan atau diubah?" data-l="pembelajaran">${esc(l.pembelajaran)}</textarea><span class="hint">Hanya untuk tim HR. Hindari menulis nama pelamar di sini.</span></div></section></div>
+      <section class="panel"><h2>Tinjauan dan pembelajaran</h2><div class="field"><label for="i-belajar">Catatan untuk rekrutmen berikutnya</label><textarea id="i-belajar" rows="6" placeholder="Bagian mana yang sesuai rencana dan mana yang tidak? Apa masukan pemangku kepentingan? Saluran dan cara penilaian apa yang perlu dipertahankan atau diubah?" data-l="pembelajaran">${esc(l.pembelajaran)}</textarea><span class="hint">Hanya untuk tim HR. Hindari menulis nama pelamar di sini.</span></div></section></div>
     </div>`;
   }
 
   // ---- Tab tahapan ----
   function tahapanHtml(l) {
     return `<div class="stack">
-      <div class="result-head"><h3>Tahapan peserta</h3>
+      <div class="result-head"><h2>Tahapan peserta</h2>
         <div class="inline"><div class="seg" role="group" aria-label="Tampilan tahapan"><button type="button" data-act="view-board" aria-pressed="${!view.tabel}">Papan</button><button type="button" data-act="view-table" aria-pressed="${!!view.tabel}">Checklist</button></div>
         <button type="button" class="ghost" data-act="apply-rec"${l.tahapan.length && pelamar(l.id).length ? '' : ' disabled'}>Isi ${esc(l.tahapan[0] ? l.tahapan[0].nama : 'tahap pertama')} dari rekomendasi</button></div></div>
       <p id="stage-note" class="note" role="status" hidden></p>
@@ -597,7 +597,7 @@
     const list = pelamar(l.id);
     if (!list.length) return '<div class="empty">Belum ada peserta. Unggah CV di tab Kandidat.</div>';
     const pr = k => R.progress(k, l.tahapan);
-    const col = (judul, items, t, cls) => `<section class="bcol ${cls || ''}"><h4>${esc(judul)} <span>${items.length}</span></h4><ul>${items.map(k => boardCard(k, l, t)).join('')}</ul></section>`;
+    const col = (judul, items, t, cls) => `<section class="bcol ${cls || ''}"><h3>${esc(judul)} <span>${items.length}</span></h3><ul>${items.map(k => boardCard(k, l, t)).join('')}</ul></section>`;
     return `<div class="board" role="group" aria-label="Peserta per tahap">${l.tahapan.map((t, i) => col(`${i + 1}. ${t.nama}`, list.filter(k => pr(k).state === 'proses' && pr(k).index === i), t)).join('')}
       ${col('Lolos semua tahap', list.filter(k => pr(k).state === 'lolos'), null, 'b-ok')}${col('Tidak lolos', list.filter(k => pr(k).state === 'gugur'), null, 'b-no')}</div>`;
   }
@@ -663,7 +663,7 @@
     const o = pengumumanState(l);
     if (!o) return '<div class="empty">Tambahkan tahapan terlebih dahulu.</div>';
     return `<div class="two">
-      <section class="panel noprint"><h3>Susun pengumuman</h3>
+      <section class="panel noprint"><h2>Susun pengumuman</h2>
         <div class="field"><label for="p-tahap">Tahap</label><select id="p-tahap" data-p-tahap>${l.tahapan.map(t => `<option value="${esc(t.id)}"${t.id === view.tahapId ? ' selected' : ''}>${esc(t.nama)}</option>`).join('')}</select></div>
         <div class="field"><label for="p-tanggal">Tanggal pengumuman</label><input id="p-tanggal" type="date" value="${esc(o.tanggal)}" data-a="tanggal"></div>
         <div class="field"><label for="p-tindak">Tindak lanjut bagi yang lolos</label><textarea id="p-tindak" rows="4" placeholder="Jadwal dan tempat tahap berikutnya" aria-describedby="p-tindak-h" data-a="tindak">${esc(o.tindak)}</textarea><span class="hint" id="p-tindak-h">Hanya terlihat oleh peserta yang lolos lewat halaman Cek hasil, tidak tampil di pengumuman publik. Alamat https menjadi tautan.</span></div>
@@ -689,17 +689,17 @@
     const g = R.groupsAt(pelamar(l.id), l.tahapan, index);
     const rows = (list, show) => (list.length
       ? `<ol>${list.map(k => `<li><b>${esc(k.nomor)}</b>${show ? ` ${esc(namaOf(k))}` : ''}</li>`).join('')}</ol>` : '<p>Tidak ada.</p>');
-    box.innerHTML = `<h3>Pengumuman Hasil ${esc(tahap.nama)}</h3>
+    box.innerHTML = `<h2>Pengumuman Hasil ${esc(tahap.nama)}</h2>
       <p class="sub">${esc(l.judul)}${l.perusahaan ? ` · ${esc(l.perusahaan)}` : ''}${o.tanggal ? `<br>${esc(R.tanggalId(o.tanggal))}` : ''}</p>
-      <h4 class="pass">Dinyatakan lolos (${g.lolos.length} peserta)</h4>${rows(g.lolos, true)}
-      <h4 class="fail">Tidak lolos (${g.tidak.length} peserta)</h4>${rows(g.tidak, o.tampilkanNama)}
-      ${o.tindak ? `<h4>Tindak lanjut</h4><p class="pre">${esc(o.tindak)}</p>` : ''}
+      <h3 class="pass">Dinyatakan lolos (${g.lolos.length} peserta)</h3>${rows(g.lolos, true)}
+      <h3 class="fail">Tidak lolos (${g.tidak.length} peserta)</h3>${rows(g.tidak, o.tampilkanNama)}
+      ${o.tindak ? `<h3>Tindak lanjut</h3><p class="pre">${esc(o.tindak)}</p>` : ''}
       <p class="sub">Keputusan panitia seleksi bersifat final.</p>`;
     const w = $('ann-warn');
     w.hidden = !g.belum.length;
     if (g.belum.length) w.textContent = `${g.belum.length} peserta belum diputuskan pada tahap ini dan belum masuk pengumuman. Lengkapi di tab Tahapan.`;
     const people = g.lolos.map(k => [k, 'lolos']).concat(g.tidak.map(k => [k, 'tidak']));
-    $('personal').innerHTML = `<h3>Pesan perorangan</h3><p class="hint">Salin lalu kirim sendiri lewat WhatsApp atau email. Isi pesan bisa diedit langsung. Tulis *seperti ini* untuk teks tebal. Aplikasi tidak mengirim apa pun.</p>
+    $('personal').innerHTML = `<h2>Pesan perorangan</h2><p class="hint">Salin lalu kirim sendiri lewat WhatsApp atau email. Isi pesan bisa diedit langsung. Tulis *seperti ini* untuk teks tebal. Aplikasi tidak mengirim apa pun.</p>
       ${l.picNama ? '' : '<p class="warn">Isi Nama PIC agar pesan ditutup dengan nama penanda tangan.</p>'}
       ${people.length ? `<ul class="people">${people.map(([k, s]) => {
         const f = factsOf(k);
@@ -827,7 +827,7 @@
     const ref = cocok ? TL.SEMUA.find(t => t.id === d.templat) : null;
     const isian = (id, label, k, attr) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" value="${esc(wz[k])}" data-wa="${k}" ${attr}></div>`;
     return `<button type="button" class="back" data-act="wz-close">${wz.targetId ? 'Kembali ke lowongan' : 'Kembali ke dasbor'}</button>
-      <div class="detail-head"><h2>Tinjau syarat: ${esc(wz.posisi)}</h2></div>
+      <div class="detail-head"><h1>Tinjau syarat: ${esc(wz.posisi)}</h1></div>
       <p class="${cocok ? 'info' : 'warn'}">${!cocok ? 'Posisi ini belum ada di pustaka, jadi draf berisi kerangka umum. Lengkapi sesuai kebutuhan jabatan.' : d.onet ? `Disusun dari templat ${esc(ref.nama)}, dirangkum dari profil jabatan O*NET (${esc(d.onet)}) dan pola lowongan di Indonesia.` : `Disusun dari rumpun jabatan ${esc(ref.nama)} tanpa rujukan khusus, jadi perlu ditelaah lebih teliti.`} Hapus centang yang tidak perlu, tambahkan yang kurang, dan pastikan tiap syarat benar-benar dibutuhkan pekerjaan.</p>
       <div class="two wz"><div class="stack">
         <fieldset class="wz-g"><legend>Info lowongan</legend>
@@ -851,7 +851,7 @@
         ${wzGroup('sertifikat', 'Sertifikasi', '', true)}
         ${wzGroup('ketentuan', 'Ketentuan seleksi', '')}
       </div>
-      <aside class="stack wz-side"><section class="panel"><h3>Pratinjau lowongan</h3><div id="wz-prev"></div></section>
+      <aside class="stack wz-side"><section class="panel"><h2>Pratinjau lowongan</h2><div id="wz-prev"></div></section>
         <p id="wz-warn" class="warn" role="alert" hidden></p>
         ${wz.targetId ? '<div class="inline"><button type="button" data-act="wz-save" data-s="terapkan">Terapkan ke lowongan</button></div>' : '<div class="inline"><button type="button" data-act="wz-save" data-s="draf">Simpan sebagai draf</button><button type="button" class="ghost" data-act="wz-save" data-s="buka">Langsung terbitkan</button></div>'}
         <p class="hint">Draf belum tampil di portal. Setelah disimpan, ketentuan screening juga sudah terisi dan masih bisa diubah.</p></aside></div>`;
@@ -863,7 +863,7 @@
     const box = $('wz-prev');
     if (!box) return;
     const t = TL.keTeks(wz.draft, labelLevel);
-    box.innerHTML = `<h4>Persyaratan</h4><p class="pre">${esc(t.persyaratan) || 'Belum ada.'}</p><h4>Deskripsi</h4><p class="pre">${esc(t.deskripsi) || 'Belum ada.'}</p>`;
+    box.innerHTML = `<h3>Persyaratan</h3><p class="pre">${esc(t.persyaratan) || 'Belum ada.'}</p><h3>Deskripsi</h3><p class="pre">${esc(t.deskripsi) || 'Belum ada.'}</p>`;
     const w = $('wz-warn'), semua = `${t.persyaratan}\n${t.deskripsi}`, hit = S.findProtected(semua.replace('penyandang disabilitas', ''));
     w.hidden = !hit;
     if (hit) w.textContent = `Draf memuat "${hit}". Menyaring pelamar berdasarkan ciri pribadi berisiko diskriminatif, kecuali memang disyaratkan pekerjaannya.`;
@@ -950,7 +950,7 @@
     if (d.pool) { view.pool[d.pool] = el.value; renderPool(); return; }
     if (!l) return;
     const val = el.type === 'checkbox' ? el.checked : el.value;
-    if (d.l) { l[d.l] = val; if (d.l === 'judul') app.querySelector('.detail-head h2').textContent = val; if (d.l.startsWith('pic')) renderAnnounce(l); }
+    if (d.l) { l[d.l] = val; if (d.l === 'judul') app.querySelector('.detail-head h1').textContent = val; if (d.l.startsWith('pic')) renderAnnounce(l); }
     else if (d.root) l.criteria[d.root] = val;
     else if (d.c) l.criteria[d.c][d.p] = val;
     else if (d.x !== undefined) l.criteria.tambahan[+d.x][d.p] = val;
@@ -1251,14 +1251,14 @@
     let u;
     try { u = await C.initHr(); } catch (e) { app.innerHTML = '<div class="empty">Tidak bisa tersambung ke server.</div>'; return; }
     if (!u) {
-      app.innerHTML = `<section class="panel login"><h2>Masuk akun HR</h2><p>Halaman ini khusus tim HR.</p><label class="consent"><input type="checkbox" id="simpan-offline"${C.simpanOffline() ? ' checked' : ''}> <span>Simpan data di perangkat ini agar tetap bisa dipakai saat internet putus. Data dihapus dari perangkat saat Anda keluar. Jangan centang di komputer bersama.</span></label><button type="button" class="start" data-act="login">Masuk dengan Google</button></section>`;
+      app.innerHTML = `<section class="panel login"><h1>Masuk akun HR</h1><p>Halaman ini khusus tim HR.</p><label class="consent"><input type="checkbox" id="simpan-offline"${C.simpanOffline() ? ' checked' : ''}> <span>Simpan data di perangkat ini agar tetap bisa dipakai saat internet putus. Data dihapus dari perangkat saat Anda keluar. Jangan centang di komputer bersama.</span></label><button type="button" class="start" data-act="login">Masuk dengan Google</button></section>`;
       return;
     }
     $('btn-logout').hidden = false;
     let admin;
     try { admin = await C.isAdmin(); } catch (e) { app.innerHTML = '<div class="empty">Sedang offline dan data belum pernah disimpan di perangkat ini. Sambungkan internet lalu muat ulang.</div>'; return; }
     if (!admin) {
-      app.innerHTML = `<section class="panel login"><h2>Akun belum terdaftar sebagai HR</h2><p>Minta pengelola menambahkan dokumen di koleksi <code>admins</code> dengan id:</p><p><code>${esc(u.uid)}</code></p></section>`;
+      app.innerHTML = `<section class="panel login"><h1>Akun belum terdaftar sebagai HR</h1><p>Minta pengelola menambahkan dokumen di koleksi <code>admins</code> dengan id:</p><p><code>${esc(u.uid)}</code></p></section>`;
       return;
     }
     $('btn-refresh').hidden = false;

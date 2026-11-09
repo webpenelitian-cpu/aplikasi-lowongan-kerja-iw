@@ -56,7 +56,7 @@
     semua = semua.filter(l => l.status !== 'draf').sort((a, b) => dibuka(b) - dibuka(a) || a.judul.localeCompare(b.judul));
     const lok = document.getElementById('lok'), pilih = saring.lok;
     lok.innerHTML = '<option value="">Semua lokasi</option>' + [...new Set(semua.map(l => l.lokasiKerja).filter(Boolean))].sort().map(x => `<option${x === pilih ? ' selected' : ''}>${esc(x)}</option>`).join('');
-    app.innerHTML = `<div class="beranda"><section aria-labelledby="jumlah"><div class="result-head"><h2 id="jumlah" role="status"></h2><div id="chips" class="chips" role="group" aria-label="Saring status lowongan"></div></div><div id="hasil" class="results"></div></section>
+    app.innerHTML = `<div class="beranda"><section aria-labelledby="jumlah"><div class="result-head"><h2 id="jumlah" aria-live="polite"></h2><div id="chips" class="chips" role="group" aria-label="Saring status lowongan"></div></div><div id="hasil" class="results"></div></section>
       <aside class="trust" aria-label="Informasi pelamar">
         <div><strong>Tanpa biaya</strong>Melamar dan mengikuti seleksi tidak dipungut biaya.</div>
         <div><strong>Kesempatan setara</strong>Penilaian berdasarkan kemampuan yang dibutuhkan pekerjaan.</div>
@@ -69,14 +69,14 @@
   function announceHtml(p) {
     const list = a => (a.length ? `<ol class="nomor">${a.map(n => `<li>${esc(n)}</li>`).join('')}</ol>` : '<p>Tidak ada.</p>');
     return `<details class="panel"><summary>Hasil ${esc(p.tahap)}${p.tanggal ? ` (${esc(R.tanggalId(p.tanggal))})` : ''}</summary>
-      <h4 class="pass">Dinyatakan lolos (${p.lolos.length} peserta)</h4>${list(p.lolos)}
-      <h4 class="fail">Tidak lolos (${p.tidak.length} peserta)</h4>${list(p.tidak)}
+      <h3 class="pass">Dinyatakan lolos (${p.lolos.length} peserta)</h3>${list(p.lolos)}
+      <h3 class="fail">Tidak lolos (${p.tidak.length} peserta)</h3>${list(p.tidak)}
     </details>`;
   }
 
   function alurHtml(l) {
     if (!(l.alur || []).length) return '';
-    return `<h3>Alur seleksi</h3><ol class="steps">${l.alur.map(t => `<li><div><strong>${esc(t.nama)}</strong><span>${esc(t.keterangan)}</span></div></li>`).join('')}</ol>`;
+    return `<h2>Alur seleksi</h2><ol class="steps">${l.alur.map(t => `<li><div><strong>${esc(t.nama)}</strong><span>${esc(t.keterangan)}</span></div></li>`).join('')}</ol>`;
   }
 
   function fieldInput(id, label, attrs) {
@@ -85,7 +85,7 @@
 
   function formHtml(l) {
     return `<form id="apply" class="panel" novalidate>
-      <h3>Kirim lamaran</h3>
+      <h2>Kirim lamaran</h2>
       <div class="jebak" aria-hidden="true"><label for="a-situs">Situs web</label><input id="a-situs" type="text" tabindex="-1" autocomplete="off"></div>
       ${fieldInput('a-nama', 'Nama lengkap', 'type="text" maxlength="100" autocomplete="name"')}
       ${fieldInput('a-email', 'Email', 'type="email" maxlength="120" autocomplete="email"')}
@@ -114,15 +114,15 @@
         : !siap(l) ? '<div class="empty">Pendaftaran untuk lowongan ini belum dibuka.</div>' : '';
     const bisa = !closed;
     app.innerHTML = `<a class="back" href="#/">Semua lowongan</a>
-      <section class="job-top">${logo(l)}<div class="job-top-in"><div class="job-head">${badgeOf(l)}<h2>${esc(l.judul)}</h2></div><p class="note">${esc(meta(l))}</p></div>
+      <section class="job-top">${logo(l)}<div class="job-top-in"><div class="job-head">${badgeOf(l)}<h1>${esc(l.judul)}</h1></div><p class="note">${esc(meta(l))}</p></div>
         ${bisa ? '<button type="button" id="to-apply">Lamar sekarang</button>' : ''}</section>
       <div class="two"><section class="panel">
-        ${l.tentang ? `<h3>Tentang perusahaan</h3><p class="pre">${esc(l.tentang)}</p>` : ''}
-        ${l.deskripsi ? `<h3>Deskripsi pekerjaan</h3><p class="pre">${esc(l.deskripsi)}</p>` : ''}
-        ${l.persyaratan ? `<h3>Persyaratan</h3><p class="pre">${esc(l.persyaratan)}</p>` : ''}
-        ${l.kompensasi ? `<h3>Waktu kerja, gaji, dan benefit</h3><p class="pre">${esc(l.kompensasi)}</p>` : ''}
+        ${l.tentang ? `<h2>Tentang perusahaan</h2><p class="pre">${esc(l.tentang)}</p>` : ''}
+        ${l.deskripsi ? `<h2>Deskripsi pekerjaan</h2><p class="pre">${esc(l.deskripsi)}</p>` : ''}
+        ${l.persyaratan ? `<h2>Persyaratan</h2><p class="pre">${esc(l.persyaratan)}</p>` : ''}
+        ${l.kompensasi ? `<h2>Waktu kerja, gaji, dan benefit</h2><p class="pre">${esc(l.kompensasi)}</p>` : ''}
         ${alurHtml(l)}
-      </section><div class="stack">${closed || formHtml(l)}${ann.length ? `<section class="stack"><h3>Pengumuman</h3>${ann.map(announceHtml).join('')}<p class="hint">Hanya nomor peserta yang ditampilkan. Nomor Anda ada di halaman Cek hasil.</p></section>` : ''}</div></div>`;
+      </section><div class="stack">${closed || formHtml(l)}${ann.length ? `<section class="stack"><h2>Pengumuman</h2>${ann.map(announceHtml).join('')}<p class="hint">Hanya nomor peserta yang ditampilkan. Nomor Anda ada di halaman Cek hasil.</p></section>` : ''}</div></div>`;
     const form = document.getElementById('apply');
     formDibuka = Date.now();
     if (form) form.addEventListener('submit', e => { e.preventDefault(); send(l, form); });
@@ -177,7 +177,7 @@
   function success(l, kode) {
     const shown = R.tampilKode(kode);
     setTitle('Lamaran terkirim');
-    app.innerHTML = `<section class="panel done"><h2>Lamaran terkirim</h2>
+    app.innerHTML = `<section class="panel done"><h1>Lamaran terkirim</h1>
       <p>Terima kasih telah melamar sebagai ${esc(l.judul)}. Simpan kode berikut. Anda memerlukannya untuk melihat hasil seleksi. Jangan bagikan kode ini kepada orang lain.</p>
       <p class="kode" id="kode">${esc(shown)}</p>
       <div class="inline"><button type="button" id="copy">Salin kode</button><a class="linkbtn" href="#/cek">Ke halaman Cek hasil</a></div>
@@ -192,7 +192,7 @@
 
   function cek() {
     setTitle('Cek hasil');
-    app.innerHTML = `<form id="cek" class="panel narrow" novalidate><h2>Cek hasil seleksi</h2>
+    app.innerHTML = `<form id="cek" class="panel narrow" novalidate><h1>Cek hasil seleksi</h1>
       <div class="field"><label for="c-kode">Kode lamaran</label><input id="c-kode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" placeholder="ABCD-EFGH-IJKL-MNOP"></div>
       <button type="submit" class="start">Cek hasil</button>
       <p class="hint">Kehilangan kode? Hubungi kontak HR pada lowongan yang Anda lamar.</p></form><div id="c-out" class="hasil-wrap" role="status"></div>`;
@@ -223,7 +223,7 @@
   const kunciSurvei = id => `survei-terisi-${id}`;
   const sudahSurvei = id => { try { return !!localStorage.getItem(kunciSurvei(id)); } catch (e) { return false; } };
   function surveiHtml() {
-    return `<form id="survei" class="hasil-tindak" novalidate><h3>Bagaimana pengalaman Anda?</h3>
+    return `<form id="survei" class="hasil-tindak" novalidate><h2>Bagaimana pengalaman Anda?</h2>
       <p class="hint">Opsional. Jawaban Anda tidak memengaruhi hasil seleksi, dan tim HR melihatnya tanpa nama atau nomor peserta.</p>
       <fieldset class="nilai"><legend>Nilai proses seleksi ini</legend><div class="nilai-isi">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="s-nilai" value="${n}"><span>${n}</span></label>`).join('')}</div><span class="hint">1 sangat kurang, 5 sangat baik</span></fieldset>
       <div class="field"><label for="s-jelas">Apakah informasi tiap tahap jelas?</label><select id="s-jelas"><option value="ya">Ya</option><option value="sebagian">Sebagian</option><option value="tidak">Tidak</option></select></div>
@@ -234,7 +234,7 @@
     const form = document.getElementById('survei');
     if (!form) return;
     const note = document.getElementById('s-note'), btn = form.querySelector('button');
-    const selesai = () => { form.innerHTML = '<h3>Terima kasih</h3><p class="note">Masukan Anda sudah kami terima.</p>'; try { localStorage.setItem(kunciSurvei(h.lowonganId), '1'); } catch (e) { /* mode privat */ } };
+    const selesai = () => { form.innerHTML = '<h2>Terima kasih</h2><p class="note">Masukan Anda sudah kami terima.</p>'; try { localStorage.setItem(kunciSurvei(h.lowonganId), '1'); } catch (e) { /* mode privat */ } };
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const pilih = form.querySelector('input[name=s-nilai]:checked');
@@ -253,16 +253,16 @@
 
   function privasi() {
     setTitle('Pemberitahuan privasi');
-    app.innerHTML = `<section class="panel privasi"><h2>Pemberitahuan privasi pelamar</h2>
+    app.innerHTML = `<section class="panel privasi"><h1>Pemberitahuan privasi pelamar</h1>
       <p>Pemberitahuan ini menjelaskan cara data lamaran Anda diproses. Pengendali data adalah perusahaan yang tercantum pada lowongan yang Anda lamar.</p>
-      <h3>Data yang dikumpulkan</h3><ul><li>Nama, email, dan nomor telepon yang Anda isi.</li><li>Teks dari CV Anda. File aslinya tidak disimpan.</li><li>Hasil tiap tahap seleksi dan catatan penilaian.</li><li>Sumber informasi lowongan dan jawaban survei, bila Anda mengisinya. Survei ditampilkan kepada tim HR tanpa nama atau nomor peserta.</li></ul>
-      <h3>Tujuan dan dasar pemrosesan</h3><p>Data dipakai untuk menilai lamaran dan menghubungi Anda selama seleksi, berdasarkan persetujuan yang Anda berikan saat melamar. Bila Anda memilih talent pool, data juga dipakai untuk menawarkan lowongan lain yang sesuai.</p>
-      <h3>Penilaian otomatis</h3><p>CV dicocokkan otomatis dengan persyaratan jabatan sebagai rekomendasi awal. Rekomendasi itu tidak menjadi keputusan. Tim HR memeriksa dan memutuskan, dan Anda dapat mengajukan keberatan.</p>
-      <h3>Cara kerja penilaian otomatis</h3><p>Aplikasi membaca teks CV lalu mencocokkannya dengan ketentuan yang ditetapkan tim HR untuk lowongan itu, seperti pendidikan, pengalaman, dan keahlian. Pencocokan memakai aturan yang tetap dan tidak memakai pembelajaran mesin.</p>
-      <h3>Verifikasi</h3><p>Dokumen hanya diminta sejauh dibutuhkan jabatan. Pemeriksaan latar belakang dilakukan setelah Anda diberi tahu dan memberi persetujuan tertulis.</p>
-      <h3>Penyimpanan dan penerima data</h3><ul><li>Data disimpan di layanan Google Firebase, wilayah Jakarta, dan hanya bisa dibuka akun HR yang berwenang.</li><li>Google reCAPTCHA memproses data teknis perangkat untuk mencegah penyalahgunaan.</li><li>Masa simpan tercantum pada persetujuan di formulir lowongan. Setelah itu data dihapus.</li></ul>
-      <h3>Pengumuman</h3><p>Portal hanya menampilkan nomor peserta. Nama, kontak, dan skor Anda tidak dipublikasikan di portal.</p>
-      <h3>Hak Anda</h3><p>Anda dapat meminta akses, perbaikan, atau penghapusan data, menarik persetujuan, dan mengajukan keberatan atas penilaian otomatis, melalui kontak HR yang tercantum pada lowongan. Menarik persetujuan dapat menghentikan proses seleksi Anda.</p>
+      <h2>Data yang dikumpulkan</h2><ul><li>Nama, email, dan nomor telepon yang Anda isi.</li><li>Teks dari CV Anda. File aslinya tidak disimpan.</li><li>Hasil tiap tahap seleksi dan catatan penilaian.</li><li>Sumber informasi lowongan dan jawaban survei, bila Anda mengisinya. Survei ditampilkan kepada tim HR tanpa nama atau nomor peserta.</li></ul>
+      <h2>Tujuan dan dasar pemrosesan</h2><p>Data dipakai untuk menilai lamaran dan menghubungi Anda selama seleksi, berdasarkan persetujuan yang Anda berikan saat melamar. Bila Anda memilih talent pool, data juga dipakai untuk menawarkan lowongan lain yang sesuai.</p>
+      <h2>Penilaian otomatis</h2><p>CV dicocokkan otomatis dengan persyaratan jabatan sebagai rekomendasi awal. Rekomendasi itu tidak menjadi keputusan. Tim HR memeriksa dan memutuskan, dan Anda dapat mengajukan keberatan.</p>
+      <h2>Cara kerja penilaian otomatis</h2><p>Aplikasi membaca teks CV lalu mencocokkannya dengan ketentuan yang ditetapkan tim HR untuk lowongan itu, seperti pendidikan, pengalaman, dan keahlian. Pencocokan memakai aturan yang tetap dan tidak memakai pembelajaran mesin.</p>
+      <h2>Verifikasi</h2><p>Dokumen hanya diminta sejauh dibutuhkan jabatan. Pemeriksaan latar belakang dilakukan setelah Anda diberi tahu dan memberi persetujuan tertulis.</p>
+      <h2>Penyimpanan dan penerima data</h2><ul><li>Data disimpan di layanan Google Firebase, wilayah Jakarta, dan hanya bisa dibuka akun HR yang berwenang.</li><li>Google reCAPTCHA memproses data teknis perangkat untuk mencegah penyalahgunaan.</li><li>Masa simpan tercantum pada persetujuan di formulir lowongan. Setelah itu data dihapus.</li></ul>
+      <h2>Pengumuman</h2><p>Portal hanya menampilkan nomor peserta. Nama, kontak, dan skor Anda tidak dipublikasikan di portal.</p>
+      <h2>Hak Anda</h2><p>Anda dapat meminta akses, perbaikan, atau penghapusan data, menarik persetujuan, dan mengajukan keberatan atas penilaian otomatis, melalui kontak HR yang tercantum pada lowongan. Menarik persetujuan dapat menghentikan proses seleksi Anda.</p>
     </section>`;
   }
 
@@ -297,11 +297,11 @@
       return `<li data-s="${k}"><span class="nama">${esc(nama)}</span><span class="ket">${label[k]}</span></li>`;
     }).join('');
     return `<section class="hasil" tabindex="-1">
-      <header class="hasil-top"><p class="eyebrow">Hasil seleksi</p><h2>${esc(h.posisi)}</h2>
+      <header class="hasil-top"><p class="eyebrow">Hasil seleksi</p><h1>${esc(h.posisi)}</h1>
         <p class="note">${esc([h.perusahaan, `Nomor peserta ${h.nomor}`].filter(Boolean).join(' · '))}${h.tanggal ? ` · Diperbarui ${esc(R.tanggalId(h.tanggal))}` : ''}</p></header>
-      <div class="hasil-status" data-s="${jenis}"><span class="ikon" aria-hidden="true"></span><div><h3>${kepala[0]}</h3>${kepala[1] ? `<p>${kepala[1]}</p>` : ''}</div></div>
-      ${h.pesan ? `<div class="hasil-tindak"><h3>Tindak lanjut</h3><p class="pre">${tautan(h.pesan)}</p></div>` : ''}
-      ${langkah ? `<div class="hasil-alur"><div class="hasil-alur-top"><h3>Perjalanan seleksi</h3>${lengkap ? `<span class="note">${lolos} dari ${alur.length} tahap</span>` : ''}</div><ol class="linimasa">${langkah}</ol></div>` : ''}
+      <div class="hasil-status" data-s="${jenis}"><span class="ikon" aria-hidden="true"></span><div><h2>${kepala[0]}</h2>${kepala[1] ? `<p>${kepala[1]}</p>` : ''}</div></div>
+      ${h.pesan ? `<div class="hasil-tindak"><h2>Tindak lanjut</h2><p class="pre">${tautan(h.pesan)}</p></div>` : ''}
+      ${langkah ? `<div class="hasil-alur"><div class="hasil-alur-top"><h2>Perjalanan seleksi</h2>${lengkap ? `<span class="note">${lolos} dari ${alur.length} tahap</span>` : ''}</div><ol class="linimasa">${langkah}</ol></div>` : ''}
       ${h.lowonganId && h.status !== 'proses' && !sudahSurvei(h.lowonganId) ? surveiHtml() : ''}
       <div class="hasil-kaki"><button type="button" class="ghost" id="c-lagi">Cek kode lain</button><p class="hint">${h.kontak ? `Ada pertanyaan tentang hasil ini? Hubungi ${esc(h.kontak)}. ` : ''}Simpan kode lamaran Anda dan jangan bagikan kepada orang lain.</p></div>
     </section>`;
