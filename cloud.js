@@ -7,8 +7,16 @@
 
   const enabled = () => !!(cfg.apiKey && cfg.projectId && cfg.appId);
 
-  async function initDb() {
-    if (db) return;
+  // Simpan data di perangkat untuk dipakai offline: hanya halaman HR, hanya bila HR memilihnya, dan dihapus saat keluar.
+  const KUNCI_OFFLINE = 'hr-simpan-offline';
+  let persist = false, tertunda = 0;
+  const simpanOffline = () => { try { return localStorage.getItem(KUNCI_OFFLINE) === '1'; } catch (e) { return false; } };
+  const aturSimpanOffline = v => { try { if (v) localStorage.setItem(KUNCI_OFFLINE, '1'); else localStorage.removeItem(KUNCI_OFFLINE); } catch (e) { /* mode privat */ } };
+  const offlineAktif = () => persist;
+  const perluMuatUlang = () => simpanOffline() !== persist; // dipanggil setelah masuk: database dibuka ulang dengan pilihan baru
+
+  async function initApp() {
+    if (app) return;
     const [appMod, fsMod] = await Promise.all([import(`${SDK}/firebase-app.js`), import(`${SDK}/firebase-firestore.js`)]);
     F = fsMod;
     app = appMod.initializeApp(cfg);
@@ -17,11 +25,24 @@
       const ac = await import(`${SDK}/firebase-app-check.js`);
       ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(cfg.recaptchaSiteKey), isTokenAutoRefreshEnabled: false }); // token diambil saat dibutuhkan, agar tetap di kuota gratis
     }
-    db = F.getFirestore(app);
+  }
+
+  // adaUser: salinan di perangkat hanya dipakai saat HR masuk. Saat belum masuk (misalnya browser sempat ditutup tanpa keluar), salinan lama dihapus.
+  async function initDb(hr, adaUser) {
+    if (db) return;
+    await initApp();
+    persist = !!hr && !!adaUser && simpanOffline();
+    if (persist) {
+      db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) });
+    } else {
+      // Bila HR berhenti memakai mode offline, salinan lama di perangkat ikut dibersihkan.
+      if (hr) await F.clearIndexedDbPersistence(F.getFirestore(app)).catch(() => {});
+      db = F.getFirestore(app);
+    }
   }
 
   async function initHr() {
-    await initDb();
+    await initApp();
     if (!auth) {
       A = await import(`${SDK}/firebase-auth.js`);
       auth = A.getAuth(app);
@@ -30,6 +51,7 @@
       await A.setPersistence(auth, A.browserSessionPersistence);
     }
     user = await new Promise(res => { const off = A.onAuthStateChanged(auth, u => { off(); res(u); }); });
+    await initDb(true, !!user);
     return user;
   }
 
@@ -39,7 +61,12 @@
     user = (await A.signInWithPopup(auth, p)).user;
     return user;
   }
-  async function signOut() { await A.signOut(auth); user = null; }
+  async function signOut() {
+    await A.signOut(auth);
+    user = null;
+    if (persist) { await F.terminate(db); await F.clearIndexedDbPersistence(db).catch(() => {}); } // data pelamar tidak tertinggal di perangkat
+  }
+  const jumlahTertunda = () => tertunda;
   const email = () => (user && user.email) || '';
 
   // Nomor peserta diambil lewat transaksi agar dua akun HR tidak mendapat nomor yang sama.
@@ -53,7 +80,7 @@
     });
   }
   async function isAdmin() {
-    try { return (await F.getDoc(F.doc(db, 'admins', user.uid))).exists(); } catch (e) { return false; }
+    try { return (await F.getDoc(F.doc(db, 'admins', user.uid))).exists(); } catch (e) { if (!navigator.onLine) throw e; return false; }
   }
 
   const rows = snap => snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -144,9 +171,14 @@
         if (p.startsWith('lamaran/')) data.diubah = F.serverTimestamp();
         batch.set(ref, data, { mergeFields: Object.keys(data) });
       });
-      await batch.commit();
+      const kirim = batch.commit();
+      if (navigator.onLine) { await kirim; continue; }
+      // Offline: perubahan antre di perangkat dan dikirim otomatis saat tersambung.
+      if (!persist) { kirim.catch(() => {}); throw new Error('offline'); }
+      tertunda += 1;
+      kirim.catch(() => {}).finally(() => { tertunda -= 1; });
     }
   }
 
-  root.Cloud = { kirimSurvei, muatSurvei, newLamaran, ubahLamaran, muatLowongan, email, reserveNomor, enabled, initHr, signIn, signOut, isAdmin, listLowongan, getLowongan, listPengumuman, submitLamaran, getHasil, loadAll, apply };
+  root.Cloud = { simpanOffline, aturSimpanOffline, offlineAktif, perluMuatUlang, jumlahTertunda, kirimSurvei, muatSurvei, newLamaran, ubahLamaran, muatLowongan, email, reserveNomor, enabled, initHr, signIn, signOut, isAdmin, listLowongan, getLowongan, listPengumuman, submitLamaran, getHasil, loadAll, apply };
 })(window);

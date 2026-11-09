@@ -89,7 +89,7 @@
   const flush = () => {
     saveTimer = null;
     return cloudOn
-      ? syncCloud().then(() => { setSync('Tersimpan'); return true; }).catch(() => {
+      ? syncCloud().then(() => { setSync(navigator.onLine ? 'Tersimpan' : 'Offline, tersimpan di perangkat'); return true; }).catch(() => {
         // Perubahan tetap di memori dan dicoba lagi; peringatan saat keluar juga tetap aktif.
         setSync('Belum tersimpan, mencoba lagi');
         showBanner('Perubahan belum tersimpan ke server. Aplikasi mencoba lagi otomatis. Jangan tutup halaman ini.');
@@ -100,7 +100,7 @@
   };
   // Status tampil sebagai lencana di samping posisi; #sync tetap menjadi pengumuman untuk pembaca layar.
   let statusSimpan = 'Tersimpan';
-  const jenisSimpan = t => (/^Menyimpan/.test(t) ? 'jalan' : /^Belum/.test(t) ? 'gagal' : 'ok');
+  const jenisSimpan = t => (/^(Menyimpan|Offline)/.test(t) ? 'jalan' : /^Belum/.test(t) ? 'gagal' : 'ok');
   const setSync = text => {
     statusSimpan = text;
     const s = $('sync'), p = $('simpan');
@@ -173,7 +173,7 @@
       const f = R.funnel(pelamar(l.id), l.tahapan).reduce((a, r) => a + r.menunggu, 0);
       if (R.lewatMasaSimpan(l, hariIni())) out.push([l, 'Masa simpan data habis. Hapus data pelamarnya.']);
       if (f) out.push([l, `${f} peserta menunggu keputusan.`]);
-      const belum = R.kabarPelamar(l, pelamar(l.id)).tertunda;
+      const belum = cloudOn ? R.kabarPelamar(l, pelamar(l.id)).tertunda : 0; // versi offline tidak menerbitkan ke portal
       if (belum) out.push([l, `${belum} peserta sudah diputuskan, tetapi hasilnya belum diterbitkan.`]);
       if (l.status === 'draf') out.push([l, 'Masih draf dan belum tampil di portal.']);
       if (l.status === 'buka' && !(l.perusahaan && l.kontak && l.retensi)) out.push([l, 'Dibuka, tetapi info wajib belum lengkap sehingga formulir tertutup.']);
@@ -203,7 +203,7 @@
       ${kpi('k6', [[ls.filter(l => l.status === 'buka').length, 'Lowongan dibuka'], [ls.filter(l => l.status === 'draf').length, 'Draf'], [ks.length, 'Total pelamar'], [n('proses'), 'Dalam proses'], [n('lolos'), 'Lolos semua tahap'], [ks.filter(([k]) => k.talentPool).length, 'Talent pool']])}
       <div class="grid2"><section class="panel"><h3>Saringan rekrutmen</h3>${bars(saringan, 'Belum ada pelamar pada tahap mana pun.')}</section>
       <section class="panel"><h3>Rekomendasi screening</h3>${bars(rek, 'Belum ada CV yang dinilai.')}</section></div>
-      ${pengalamanHtml(kabar)}
+      ${cloudOn ? pengalamanHtml(kabar) : ''}
       <section class="panel"><h3>Perlu tindakan</h3>${todo.length ? `<ul class="rows">${todo.slice(0, 8).map(([l, t]) => `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${esc(t)}</span></button></li>`).join('')}</ul>${todo.length > 8 ? `<p class="note">Dan ${todo.length - 8} hal lainnya.</p>` : ''}` : '<p class="note">Tidak ada yang perlu ditindaklanjuti.</p>'}</section>
       <section class="panel"><h3>Lowongan</h3>${ls.length ? `<ul class="rows">${ls.map(l => { const s = stat(l); return `<li><button type="button" class="row" data-act="open" data-id="${esc(l.id)}"><strong>${esc(l.judul)}</strong><span>${s.total} pelamar · ${s.proses} proses · ${s.lolos} lolos · ${s.gugur} tidak lolos</span>${badgeL(l)}</button></li>`; }).join('')}</ul>` : '<p class="note">Belum ada lowongan.</p>'}</section></div>`;
   }
@@ -450,9 +450,12 @@
     else list.innerHTML = shown.map((k, i) => cardHtml(k, i, l)).join('');
   }
 
+  // Nomor peserta diambil dari server, jadi unggah CV di mode online butuh koneksi.
+  const perluKoneksi = aksi => { if (!cloudOn || navigator.onLine) return false; showBanner(`${aksi} butuh koneksi internet. Coba lagi setelah tersambung.`); return true; };
+
   async function addFiles(fileList) {
     const l = current();
-    if (!l) return;
+    if (!l || perluKoneksi('Unggah CV')) return;
     const files = Array.from(fileList);
     const fresh = files.filter(f => !pelamar(l.id).some(k => k.fileName === f.name && k.size === f.size));
     const dup = files.length - fresh.length;
@@ -543,9 +546,9 @@
       <div class="grid-side"><section class="panel"><h3>Saringan tahap</h3>${bars(f, '', true)}</section>
       <section class="panel"><h3>Kesiapan lowongan</h3>
         <ul class="ready">${kesiapan(l).map(([t, ok]) => `<li><span class="badge ${ok ? 'b-lolos' : 'b-tidak'}">${ok ? 'Siap' : 'Belum'}</span><span>${esc(t)}</span></li>`).join('')}</ul></section></div>
-      <div class="grid2">${pengalamanHtml(R.kabarPelamar(l, s.list))}${metrikHtml(l, s)}</div>
+      <div class="grid2">${cloudOn ? pengalamanHtml(R.kabarPelamar(l, s.list)) : ''}${metrikHtml(l, s)}</div>
       ${s.lolos ? preboardingHtml(l) : ''}
-      <div class="grid2">${saluranHtml(l, s)}${surveiHtml(l)}</div>
+      ${cloudOn ? `<div class="grid2">${saluranHtml(l, s)}${surveiHtml(l)}</div>` : ''}
       <div class="grid2">${kecocokanHtml(l, s)}
       <section class="panel"><h3>Tinjauan dan pembelajaran</h3><div class="field"><label for="i-belajar">Catatan untuk rekrutmen berikutnya</label><textarea id="i-belajar" rows="6" placeholder="Bagian mana yang sesuai rencana dan mana yang tidak? Apa masukan pemangku kepentingan? Saluran dan cara penilaian apa yang perlu dipertahankan atau diubah?" data-l="pembelajaran">${esc(l.pembelajaran)}</textarea><span class="hint">Hanya untuk tim HR. Hindari menulis nama pelamar di sini.</span></div></section></div>
     </div>`;
@@ -1059,6 +1062,7 @@
     },
     print() { window.print(); },
     async publish() {
+      if (perluKoneksi('Menerbitkan hasil')) return;
       const l = current(), o = pengumumanState(l), i = l.tahapan.findIndex(t => t.id === view.tahapId), tahap = l.tahapan[i];
       const g = R.groupsAt(pelamar(l.id), l.tahapan, i);
       if (l.status === 'draf') { showBanner('Lowongan masih draf. Ubah statusnya di tab Ketentuan sebelum menerbitkan hasil.'); return; }
@@ -1079,10 +1083,13 @@
       }
     },
     async refresh() {
+      if (perluKoneksi('Memuat data terbaru')) return;
       try { await muatBaru(); } catch (e) { showBanner('Gagal memuat data dari server.'); }
     },
     async login() {
-      try { await C.signIn(); showBanner(''); await bootCloud(); } catch (e) {
+      const pilih = $('simpan-offline');
+      if (pilih) C.aturSimpanOffline(pilih.checked);
+      try { await C.signIn(); showBanner(''); if (C.perluMuatUlang()) { window.location.reload(); return; } await bootCloud(); } catch (e) {
         showBanner(e && e.code === 'auth/popup-blocked' ? 'Jendela login diblokir browser. Izinkan popup untuk situs ini, lalu coba lagi.' : 'Gagal masuk. Coba lagi.');
       }
     },
@@ -1096,6 +1103,8 @@
         if ((await flush()) === false && !window.confirm('Ada perubahan yang belum tersimpan ke server. Tetap keluar?')) return;
         clearTimeout(saveTimer);
       }
+      // Jumlah antrean hilang bila halaman dimuat ulang saat offline, jadi saat offline selalu ditanyakan.
+      if (C.offlineAktif() && (C.jumlahTertunda() || !navigator.onLine) && !window.confirm('Sedang offline. Perubahan yang belum terkirim akan terhapus dari perangkat ini bila Anda keluar sekarang. Tetap keluar?')) return;
       wz = null; saveTimer = null;
       await C.signOut();
       window.location.reload();
@@ -1205,6 +1214,7 @@
 
   // Lamaran dari portal belum bernomor; nomor diberikan di sini agar pelamar bisa melihatnya.
   async function beriNomor() {
+    if (!navigator.onLine) return; // nomor diberikan saat tersambung kembali
     const fresh = [];
     for (const l of db.lowongan) {
       const baru = db.kandidat.filter(k => !k.nomor && k.lowonganId === l.id);
@@ -1225,6 +1235,7 @@
         clearTimeout(saveTimer);
         if ((await flush()) === false) { ulang(60000); return; } // perubahan jangan hilang: coba lagi semenit kemudian
       }
+      if (C.offlineAktif() && (C.jumlahTertunda() || !navigator.onLine)) { ulang(60000); return; } // tunggu sampai perubahan offline terkirim
       wz = null;
       await C.signOut();
       window.location.reload();
@@ -1240,15 +1251,25 @@
     let u;
     try { u = await C.initHr(); } catch (e) { app.innerHTML = '<div class="empty">Tidak bisa tersambung ke server.</div>'; return; }
     if (!u) {
-      app.innerHTML = '<section class="panel login"><h2>Masuk akun HR</h2><p>Halaman ini khusus tim HR.</p><button type="button" class="start" data-act="login">Masuk dengan Google</button></section>';
+      app.innerHTML = `<section class="panel login"><h2>Masuk akun HR</h2><p>Halaman ini khusus tim HR.</p><label class="consent"><input type="checkbox" id="simpan-offline"${C.simpanOffline() ? ' checked' : ''}> <span>Simpan data di perangkat ini agar tetap bisa dipakai saat internet putus. Data dihapus dari perangkat saat Anda keluar. Jangan centang di komputer bersama.</span></label><button type="button" class="start" data-act="login">Masuk dengan Google</button></section>`;
       return;
     }
     $('btn-logout').hidden = false;
-    if (!(await C.isAdmin())) {
+    let admin;
+    try { admin = await C.isAdmin(); } catch (e) { app.innerHTML = '<div class="empty">Sedang offline dan data belum pernah disimpan di perangkat ini. Sambungkan internet lalu muat ulang.</div>'; return; }
+    if (!admin) {
       app.innerHTML = `<section class="panel login"><h2>Akun belum terdaftar sebagai HR</h2><p>Minta pengelola menambahkan dokumen di koleksi <code>admins</code> dengan id:</p><p><code>${esc(u.uid)}</code></p></section>`;
       return;
     }
     $('btn-refresh').hidden = false;
+    if (C.offlineAktif()) $('foot').textContent = 'Data pelamar tersimpan di server dan juga di perangkat ini agar bisa dipakai offline. Salinan di perangkat dihapus saat Anda keluar.';
+    const kabarJaringan = () => {
+      if (!navigator.onLine) setSync(C.offlineAktif() ? 'Offline, perubahan disimpan di perangkat' : 'Offline, perubahan belum tersimpan');
+      else if (/^Offline/.test(statusSimpan)) setSync('Tersambung kembali');
+    };
+    window.addEventListener('online', kabarJaringan);
+    window.addEventListener('offline', kabarJaringan);
+    kabarJaringan();
     jagaSesi();
     try { await reloadCloud(); } catch (e) { app.innerHTML = '<div class="empty">Gagal memuat data dari server.</div>'; }
   }
@@ -1310,6 +1331,7 @@
     if (saveTimer || (wz && wz.draft)) { e.preventDefault(); e.returnValue = ''; }
   });
 
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !window.BACA_CV_LOKAL) navigator.serviceWorker.register('sw.js').catch(() => {}); // tampilan tetap terbuka saat offline
   if (location.hostname === 'localhost') window.__lowonganApp = { addFiles, flush }; // hanya untuk pengujian lokal
 
   (async () => {

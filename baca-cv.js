@@ -17,16 +17,21 @@
   }
 
   // Pustaka pembaca (lebih dari 900 KB) baru diunduh saat ada file yang dibaca, bukan untuk setiap pengunjung.
+  // Versi offline memakai salinan lokal di folder vendor (hash-nya diperiksa saat paket dibuat).
+  const LOKAL = typeof root.BACA_CV_LOKAL === 'string' ? root.BACA_CV_LOKAL : '';
   const LIB = {
-    pdf: { url: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', sri: 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e', nama: 'pdfjsLib' },
-    docx: { url: 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', sri: 'sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz', nama: 'mammoth' },
+    pdf: { url: LOKAL ? `${LOKAL}pdf.min.js` : 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', sri: 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e', nama: 'pdfjsLib' },
+    docx: { url: LOKAL ? `${LOKAL}mammoth.browser.min.js` : 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', sri: 'sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz', nama: 'mammoth' },
+    // Dimuat di halaman sehingga pdf.js berjalan tanpa Web Worker, yang diblokir browser untuk file lokal.
+    worker: { url: `${LOKAL}pdf.worker.min.js`, nama: 'pdfjsWorker' },
   };
   function muat(lib) {
     if (root[lib.nama]) return Promise.resolve();
     if (!lib.janji) {
       lib.janji = new Promise((resolve, reject) => {
         const s = document.createElement('script');
-        s.src = lib.url; s.integrity = lib.sri; s.crossOrigin = 'anonymous';
+        s.src = lib.url;
+        if (!LOKAL) { s.integrity = lib.sri; s.crossOrigin = 'anonymous'; }
         s.onload = resolve;
         s.onerror = () => { lib.janji = null; reject(new Error('Pembaca file gagal dimuat. Periksa koneksi internet lalu coba lagi.')); };
         document.head.appendChild(s);
@@ -78,8 +83,10 @@
     return left.size >= 8 && right.size >= 8 ? g : null;
   }
 
-  async function pdfText(file) {    await muat(LIB.pdf);
-    pdfjsLib.GlobalWorkerOptions.workerSrc = await verifiedWorker();
+  async function pdfText(file) {
+    await muat(LIB.pdf);
+    if (LOKAL) await muat(LIB.worker);
+    else pdfjsLib.GlobalWorkerOptions.workerSrc = await verifiedWorker();
     // isEvalSupported dimatikan untuk menutup CVE-2024-4367; PDF yang sangat panjang dibatasi.
     const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise;
     const pages = [];

@@ -327,6 +327,7 @@
   document.getElementById('cari').addEventListener('submit', e => { e.preventDefault(); saring.q = document.getElementById('q').value.trim(); daftar(); });
   document.getElementById('q').addEventListener('input', e => { saring.q = e.target.value.trim(); daftar(); });
   document.getElementById('lok').addEventListener('change', e => { saring.lok = e.target.value; daftar(); });
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !window.BACA_CV_LOKAL) navigator.serviceWorker.register('sw.js').catch(() => {}); // tampilan tetap terbuka saat offline
   app.addEventListener('click', e => {
     const c = e.target.closest('#chips [data-s]');
     if (!c) return;
