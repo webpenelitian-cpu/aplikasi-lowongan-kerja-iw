@@ -1334,7 +1334,6 @@
   });
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !window.BACA_CV_LOKAL) navigator.serviceWorker.register('sw.js').catch(() => {}); // tampilan tetap terbuka saat offline
-  if (location.hostname === 'localhost') window.__lowonganApp = { addFiles, flush }; // hanya untuk pengujian lokal
 
   (async () => {
     if (C && C.enabled()) { await bootCloud(); return; }
