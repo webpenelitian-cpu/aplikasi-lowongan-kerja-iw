@@ -15,22 +15,26 @@
   const offlineAktif = () => persist;
   const perluMuatUlang = () => simpanOffline() !== persist; // dipanggil setelah masuk: database dibuka ulang dengan pilihan baru
 
-  async function initApp() {
-    if (app) return;
-    const [appMod, fsMod] = await Promise.all([import(`${SDK}/firebase-app.js`), import(`${SDK}/firebase-firestore.js`)]);
-    F = fsMod;
-    app = appMod.initializeApp(cfg);
-    // CAPTCHA tanpa teka-teki: tiap permintaan membawa token reCAPTCHA yang diperiksa Firebase.
-    if (cfg.recaptchaSiteKey) {
-      const ac = await import(`${SDK}/firebase-app-check.js`);
-      ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(cfg.recaptchaSiteKey), isTokenAutoRefreshEnabled: false }); // token diambil saat dibutuhkan, agar tetap di kuota gratis
-    }
+  let siapApp = null;
+  function initApp() {
+    // Ketiga modul diunduh bersamaan, bukan satu per satu.
+    return siapApp || (siapApp = (async () => {
+      const [appMod, fsMod, ac] = await Promise.all([
+        import(`${SDK}/firebase-app.js`), import(`${SDK}/firebase-firestore.js`),
+        cfg.recaptchaSiteKey ? import(`${SDK}/firebase-app-check.js`) : null,
+      ]);
+      F = fsMod;
+      app = appMod.initializeApp(cfg);
+      // CAPTCHA tanpa teka-teki: tiap permintaan membawa token reCAPTCHA yang diperiksa Firebase.
+      if (ac) ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(cfg.recaptchaSiteKey), isTokenAutoRefreshEnabled: false }); // token diambil saat dibutuhkan, agar tetap di kuota gratis
+    })().catch(e => { siapApp = null; throw e; }));
   }
 
   // adaUser: salinan di perangkat hanya dipakai saat HR masuk. Saat belum masuk (misalnya browser sempat ditutup tanpa keluar), salinan lama dihapus.
   async function initDb(hr, adaUser) {
     if (db) return;
     await initApp();
+    if (db) return; // panggilan lain sudah menyiapkan database selama menunggu
     persist = !!hr && !!adaUser && simpanOffline();
     if (persist) {
       db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) });
@@ -42,9 +46,10 @@
   }
 
   async function initHr() {
-    await initApp();
+    // Modul login diunduh bersamaan dengan modul inti.
+    const [, authMod] = await Promise.all([initApp(), auth ? null : import(`${SDK}/firebase-auth.js`)]);
     if (!auth) {
-      A = await import(`${SDK}/firebase-auth.js`);
+      A = authMod;
       auth = A.getAuth(app);
       auth.languageCode = 'id';
       // Sesi berakhir saat browser ditutup, supaya data pelamar tidak terbuka di komputer bersama.
