@@ -5,6 +5,8 @@
   --ok: #14633b; --ok-bg: #e0f2e7; --mid: #6e4a00; --mid-bg: #fbeed0;
   --no: #9a2a2a; --no-bg: #fae3e1; --chk: #27487f; --chk-bg: #e3eaf8;
   --radius: 8px; --shadow: 0 1px 2px rgba(15, 30, 45, .06);
+  --field-line: #6e7c8b; /* batas isian >= 3:1 di semua latar terang (WCAG 1.4.11) */
+  --hover: rgba(11, 92, 173, .08);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -12,6 +14,7 @@
     --line: #33424f; --brand: #10283f; --accent: #7db8f5; --accent-ink: #0b1e30; --focus: #7db8f5;
     --ok: #86dcab; --ok-bg: #16372a; --mid: #f0c674; --mid-bg: #392e14;
     --no: #f5aaa4; --no-bg: #43201f; --chk: #adc7f5; --chk-bg: #1f2e4a; --shadow: none;
+    --field-line: #8795a3; --hover: rgba(125, 184, 245, .12);
   }
 }
 * { box-sizing: border-box; }
@@ -424,6 +427,27 @@ dialog > * + * { margin-top: 8px; }
   .announce { padding: 16px; }
   .stage-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- Penyempurnaan UI/UX 16-11-2026 ---------- */
+/* Batas isian dan pilihan nilai >= 3:1 terhadap latar (WCAG 2.2 SC 1.4.11; GOV.UK Design System: text input, radios) */
+input[type=text], input[type=number], input[type=search], input[type=email], input[type=tel], input[type=date], select, textarea { border-color: var(--field-line); }
+.nilai-isi span { border-color: var(--field-line); }
+.drop { border-color: var(--field-line); }
+input[aria-invalid=true] { border-color: var(--no); }
+/* Status hover terlihat untuk semua tombol (Material 3 state layer; USWDS button states) */
+@media (hover: hover) {
+  button:hover:not(:disabled) { filter: brightness(1.08); }
+  button.ghost:hover:not(:disabled), .chip:hover:not([aria-pressed=true]), .tick button:hover:not([aria-pressed=true]), .seg button:hover:not([aria-pressed=true]),
+  .tabs button:hover:not([aria-current]), .linkbtn:hover, .nilai-isi label:hover span { filter: none; background: var(--hover); border-color: var(--accent); }
+  .tabs button:hover:not([aria-current]) { color: var(--text); border-color: transparent; border-bottom-color: var(--line); }
+  .side .tabs button:hover:not([aria-current]) { border-left-color: var(--line); }
+  .top .inline a:hover, .top .inline button:hover:not(:disabled) { filter: none; background: rgba(255, 255, 255, .12); border-color: #ffffff; }
+  .brand:hover { filter: none; }
+  .row:hover, .back:hover, .job:hover { filter: none; }
+  .back:hover { text-decoration: underline; }
+}
+/* Tautan kembali dengan penanda arah (GOV.UK Design System: back link) */
+.back::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border: solid currentColor; border-width: 0 0 2px 2px; transform: rotate(45deg); vertical-align: 1px; }
 @media print {
   body { background: #fff; color: #000; }
   .noprint, .grecaptcha-badge, dialog { display: none !important; }

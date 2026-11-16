@@ -386,7 +386,7 @@
   // ---- Tab kandidat ----
   function kandidatHtml(l) {
     return `<div class="stack">
-      <div id="drop" class="drop" tabindex="0" role="button" aria-label="Unggah file CV">
+      <div id="drop" class="drop" tabindex="0" role="button" aria-label="Tarik file CV ke sini, atau klik untuk memilih. PDF, DOCX, atau TXT, bisa banyak file sekaligus.">
         <strong>Tarik file CV ke sini, atau klik untuk memilih</strong>
         <span>PDF, DOCX, atau TXT. Bisa banyak file sekaligus.</span>
         <input id="file" type="file" multiple accept=".pdf,.docx,.txt" hidden>
