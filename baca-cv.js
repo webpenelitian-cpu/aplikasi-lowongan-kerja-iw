@@ -88,7 +88,16 @@
     if (LOKAL) await muat(LIB.worker);
     else pdfjsLib.GlobalWorkerOptions.workerSrc = await verifiedWorker();
     // isEvalSupported dimatikan untuk menutup CVE-2024-4367; PDF yang sangat panjang dibatasi.
-    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise;
+    const tugas = pdfjsLib.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false });
+    // Dokumen selalu ditutup, juga saat PDF rusak, agar memori dan worker pdf.js tidak menumpuk saat unggah massal.
+    try {
+      return await isiPdf(await tugas.promise);
+    } finally {
+      await tugas.destroy().catch(() => {});
+    }
+  }
+
+  async function isiPdf(doc) {
     const pages = [];
     for (let n = 1; n <= Math.min(doc.numPages, MAX_PAGES); n++) {
       const page = await doc.getPage(n);
@@ -102,7 +111,6 @@
       const cross = items.filter(i => i.x < gutter && i.end > gutter);
       pages.push([cross, items.filter(i => i.end <= gutter), items.filter(i => i.x >= gutter)].map(linesOf).filter(Boolean).join('\n'));
     }
-    await doc.destroy();
     return pages.join('\n');
   }
 

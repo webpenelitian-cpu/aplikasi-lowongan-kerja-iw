@@ -455,6 +455,12 @@
   // Nomor peserta diambil dari server, jadi unggah CV di mode online butuh koneksi.
   const perluKoneksi = aksi => { if (!cloudOn || navigator.onLine) return false; showBanner(`${aksi} butuh koneksi internet. Coba lagi setelah tersambung.`); return true; };
 
+  // Menyerahkan giliran ke browser tanpa jeda waktu buatan: scheduler.yield bila ada, selain itu MessageChannel
+  // (lebih cepat dari setTimeout 0 yang dibatasi minimal 4 ms). Rujukan: mdn/content, scheduler.yield dan MessageChannel.
+  const jeda = () => (window.scheduler && typeof window.scheduler.yield === 'function')
+    ? window.scheduler.yield()
+    : new Promise(res => { const c = new MessageChannel(); c.port1.onmessage = () => res(); c.port2.postMessage(0); });
+
   async function addFiles(fileList) {
     const l = current();
     if (!l || perluKoneksi('Unggah CV')) return;
@@ -462,6 +468,18 @@
     const fresh = files.filter(f => !pelamar(l.id).some(k => k.fileName === f.name && k.size === f.size));
     const dup = files.length - fresh.length;
     const note = text => { const p = $('progress'); if (p) { p.hidden = !text; p.textContent = text; } };
+    // CV dibaca satu per satu (satu worker pdf.js), dan daftar digambar ulang paling sering dua kali per detik,
+    // bukan setiap berkas, supaya unggahan ratusan CV tidak membuat browser dan aplikasi lain tersendat.
+    // Saat tab tersembunyi daftar tidak digambar; gambar terakhir di akhir unggahan selalu dijalankan.
+    let terakhir = 0;
+    const gambar = (paksa = false) => {
+      if (!paksa && (document.hidden || performance.now() - terakhir < 500)) return;
+      terakhir = performance.now();
+      if (current() !== l) return; // HR sudah pindah ke lowongan lain
+      renderList(l);
+      const hc = $('head-count');
+      if (hc) hc.textContent = `${pelamar(l.id).length} pelamar`;
+    };
     for (let i = 0; i < fresh.length; i++) {
       const f = fresh[i];
       note(`Membaca ${i + 1} dari ${fresh.length}: ${f.name}`);
@@ -474,10 +492,10 @@
         k.error = BacaCV.friendlyError(e);
       }
       db.kandidat.push(k);
-      renderList(l);
-      const hc = $('head-count');
-      if (hc) hc.textContent = `${pelamar(l.id).length} pelamar`;
+      gambar();
+      await jeda(); // beri giliran ke klik dan ketikan HR sebelum berkas berikutnya
     }
+    gambar(true);
     const csv = app.querySelector('[data-act="csv"]');
     if (csv) csv.disabled = !pelamar(l.id).length;
     note(dup ? `${dup} file dilewati karena sudah diunggah.` : '');
