@@ -1354,15 +1354,20 @@
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !window.BACA_CV_LOKAL) navigator.serviceWorker.register('sw.js').catch(() => {}); // tampilan tetap terbuka saat offline
 
   (async () => {
-    if (C && C.enabled()) { await bootCloud(); return; }
     try {
-      const saved = await loadDb();
-      if (saved && R.validBackup(saved)) db = saved;
-      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-    } catch (e) {
-      showBanner('Browser ini tidak mengizinkan penyimpanan. Data akan hilang saat halaman ditutup, jadi unduh cadangan sebelum keluar.');
+      if (C && C.enabled()) { await bootCloud(); return; }
+      try {
+        const saved = await loadDb();
+        if (saved && R.validBackup(saved)) db = saved;
+        if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+      } catch (e) {
+        showBanner('Browser ini tidak mengizinkan penyimpanan. Data akan hilang saat halaman ditutup, jadi unduh cadangan sebelum keluar.');
+      }
+      render();
+      cekMasaSimpan();
+    } finally {
+      // Isi, tombol kepala, dan kaki halaman baru ditampilkan setelah tampilan pertama jadi, supaya tidak bergeser (CLS).
+      document.body.classList.add('siap');
     }
-    render();
-    cekMasaSimpan();
   })();
 })();
