@@ -29,7 +29,13 @@
   const openIds = new Set();
   const factsCache = new Map();
 
-  const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }; // dibuat sekali, bukan tiap karakter
+  const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ESC[c]);
+  // Satu Collator dan satu format tanggal dipakai ulang: localeCompare/toLocaleDateString tanpa objek Intl
+  // membuat objek baru di setiap panggilan (mdn/content: String.prototype.localeCompare dan
+  // Date.prototype.toLocaleDateString, bagian "Performance"). Hasil urutan dan teks sama persis.
+  const urutTeks = new Intl.Collator().compare;
+  const formatHariIni = new Intl.DateTimeFormat('en-CA');
   const current = () => db.lowongan.find(l => l.id === view.id) || null;
   const pelamar = id => db.kandidat.filter(k => k.lowonganId === id);
 
@@ -145,10 +151,10 @@
     return pelamar(l.id).map(k => {
       const r = resultOf(k, l);
       return { k, rank: S.RANK[recOf(k, l)], score: r && r.score !== null ? r.score : -1 };
-    }).sort((a, b) => (a.rank === undefined ? 9 : a.rank) - (b.rank === undefined ? 9 : b.rank) || b.score - a.score || String(a.k.nomor || '').localeCompare(String(b.k.nomor || ''))).map(x => x.k);
+    }).sort((a, b) => (a.rank === undefined ? 9 : a.rank) - (b.rank === undefined ? 9 : b.rank) || b.score - a.score || urutTeks(String(a.k.nomor || ''), String(b.k.nomor || ''))).map(x => x.k);
   }
 
-  const hariIni = () => new Date().toLocaleDateString('en-CA'); // format YYYY-MM-DD pada zona waktu perangkat
+  const hariIni = () => formatHariIni.format(new Date()); // format YYYY-MM-DD pada zona waktu perangkat
 
   function cekMasaSimpan() {
     const n = db.lowongan.filter(l => R.lewatMasaSimpan(l, hariIni())).length;
@@ -412,29 +418,45 @@
     return `<li><span class="mark m-${x.status}">${MARK[x.status]}</span><div><strong>${esc(x.label)}</strong>${x.wajib ? '<span class="tag">wajib</span>' : ''}<span class="tag">bobot ${esc(x.bobot)}</span><br>${esc(x.detail)}${bukti}</div></li>`;
   }
 
-  function cardHtml(k, i, l) {
-    const rec = recOf(k, l), r = resultOf(k, l), f = factsOf(k);
+  function cardHtml(k, i, l, emailGanda) {
+    const rec = recOf(k, l), r = resultOf(k, l);
     const score = r && r.score !== null ? r.score : null;
-    const alasan = k.error ? [k.error] : (r ? r.alasan : []);
-    return `<details class="card" data-id="${esc(k.id)}"${openIds.has(k.id) ? ' open' : ''}>
+    const buka = openIds.has(k.id);
+    // Isi kartu yang tertutup baru digambar saat dibuka (event toggle pada <details>; mdn/content: HTMLDetailsElement
+    // toggle event). Dengan ratusan pelamar ini menghemat puluhan ribu elemen DOM; isinya sama persis saat dibuka.
+    return `<details class="card" data-id="${esc(k.id)}"${buka ? ' open' : ''}>
       <summary>
         <span class="rank">${i + 1}</span>
         <span class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)} · ${esc(R.progressLabel(R.progress(k, l.tahapan)))}${k.talentPool ? ' · Setuju talent pool' : ''}</small></span>
         <span class="score"><span>${score === null ? '-' : score}</span><span class="bar"><i style="width:${score === null ? 0 : score}%"></i></span></span>
         ${rec ? `<span class="badge b-${rec}">${REC[rec]}</span>` : '<span class="badge b-none">Belum dinilai</span>'}
       </summary>
-      <div class="detail">
+      <div class="detail"${buka ? '' : ' data-tunda="1"'}>${buka ? isiKartuHtml(k, l, emailGanda) : ''}</div>
+    </details>`;
+  }
+
+  function isiKartuHtml(k, l, emailGanda) {
+    const r = resultOf(k, l), f = factsOf(k);
+    const alasan = k.error ? [k.error] : (r ? r.alasan : []);
+    return `
         ${r && r.peringatan ? `<p class="warn">${esc(r.peringatan)}</p>` : ''}
         ${alasan.length ? `<div class="reason"><strong>Alasan</strong><ul>${alasan.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>` : ''}
         ${factsHtml(f)}
         ${r && r.checks.length ? `<ul class="checks">${r.checks.map(checkHtml).join('')}</ul>` : ''}
-        ${f && f.email && pelamar(l.id).some(x => x !== k && factsOf(x) && factsOf(x).email.toLowerCase() === f.email.toLowerCase()) ? '<p class="warn">Email ini dipakai lebih dari satu lamaran pada lowongan ini.</p>' : ''}
+        ${f && f.email && emailGanda.has(f.email.toLowerCase()) ? '<p class="warn">Email ini dipakai lebih dari satu lamaran pada lowongan ini.</p>' : ''}
         <div class="actions"><span class="note">File: ${esc(k.fileName)}${cloudOn ? ` · Kode cek hasil: ${esc(R.tampilKode(k.id))}` : ''}</span><button type="button" class="ghost" data-act="rm" data-id="${esc(k.id)}">Hapus pelamar ini</button></div>
         <div class="field"><label for="n-${esc(k.id)}">Catatan penilaian</label><textarea id="n-${esc(k.id)}" rows="2" data-note="${esc(k.id)}" placeholder="Bukti yang mendukung keputusan, berkaitan dengan pekerjaan">${esc(k.catatan)}</textarea></div>
         ${(k.jejak || []).length ? `<details class="raw"><summary>Riwayat keputusan</summary><ol class="jejak">${k.jejak.map(j => `<li>${esc(j.pada)} · ${esc(j.tahap)}: ${esc(j.hasil)}${j.oleh ? ` · ${esc(j.oleh)}` : ''}</li>`).join('')}</ol></details>` : ''}
-        ${f ? `<details class="raw"><summary>Lihat teks yang terbaca</summary><pre>${esc(f.text)}</pre></details>` : ''}
-      </div>
-    </details>`;
+        ${f ? `<details class="raw"><summary>Lihat teks yang terbaca</summary><pre>${esc(f.text)}</pre></details>` : ''}`;
+  }
+
+  // Mengisi kartu yang baru dibuka. Peringatan email ganda dihitung dari seluruh pelamar lowongan ini, sama seperti saat digambar.
+  function isiDetail(card) {
+    const box = card.querySelector(':scope > .detail[data-tunda]');
+    const l = current(), k = l && db.kandidat.find(x => x.id === card.dataset.id);
+    if (!box || !k) return;
+    box.innerHTML = isiKartuHtml(k, l, emailGanda(pelamar(l.id)));
+    box.removeAttribute('data-tunda');
   }
 
   function renderList(l) {
@@ -449,7 +471,19 @@
       (!q || k.fileName.toLowerCase().includes(q) || String(k.nomor || '').toLowerCase().includes(q) || String(k.text || '').toLowerCase().includes(q)));
     if (!all.length) list.innerHTML = '<div class="empty">Belum ada CV. Isi ketentuan, lalu unggah file CV.</div>';
     else if (!shown.length) list.innerHTML = '<div class="empty">Tidak ada kandidat yang cocok dengan saringan ini.</div>';
-    else list.innerHTML = shown.map((k, i) => cardHtml(k, i, l)).join('');
+    else list.innerHTML = shown.map((k, i) => cardHtml(k, i, l, emailGanda(all))).join('');
+  }
+
+  // Email yang dipakai lebih dari satu lamaran pada lowongan ini, dihitung sekali per gambar ulang (O(n)),
+  // bukan dibandingkan dengan semua pelamar untuk setiap kartu (O(n^2)). Rujukan pola: mdn/content, Map.
+  // Hasil sama: sebuah kartu diberi peringatan bila ada lamaran LAIN dengan email yang sama.
+  function emailGanda(semua) {
+    if (emailGanda.dari === semua) return emailGanda.hasil;
+    const n = new Map();
+    semua.forEach(x => { const f = factsOf(x); if (f && f.email) { const e = f.email.toLowerCase(); n.set(e, (n.get(e) || 0) + 1); } });
+    emailGanda.dari = semua;
+    emailGanda.hasil = new Set([...n].filter(([, c]) => c > 1).map(([e]) => e));
+    return emailGanda.hasil;
   }
 
   // Nomor peserta diambil dari server, jadi unggah CV di mode online butuh koneksi.
@@ -627,7 +661,7 @@
     const list = pelamar(l.id).slice().sort((a, b) => {
       const pa = R.progress(a, l.tahapan), pb = R.progress(b, l.tahapan);
       const w = p => (p.state === 'gugur' ? -1 : p.index);
-      return w(pb) - w(pa) || a.nomor.localeCompare(b.nomor);
+      return w(pb) - w(pa) || urutTeks(a.nomor, b.nomor);
     });
     if (!list.length) return '<div class="empty">Belum ada peserta. Unggah CV di tab Kandidat.</div>';
     if (!l.tahapan.length) return '<div class="empty">Tambahkan minimal satu tahap.</div>';
@@ -1289,6 +1323,11 @@
     };
     window.addEventListener('online', kabarJaringan);
     window.addEventListener('offline', kabarJaringan);
+    // Perubahan yang disimpan saat offline lalu ditolak server: beri tahu HR, jangan diam (sebelumnya galat ditelan).
+    window.addEventListener('cloud-gagal-kirim', e => {
+      setSync('Belum tersimpan');
+      showBanner(`Sebagian perubahan yang disimpan saat offline ditolak server${e.detail && e.detail.kode ? ` (${e.detail.kode})` : ''}. Pilih Muat data terbaru, lalu periksa dan ulangi perubahan Anda.`);
+    });
     kabarJaringan();
     jagaSesi();
     try { await reloadCloud(); } catch (e) { app.innerHTML = '<div class="empty">Gagal memuat data dari server.</div>'; }
@@ -1340,7 +1379,7 @@
   app.addEventListener('toggle', e => {
     const el = e.target;
     if (!el.classList || !el.classList.contains('card')) return;
-    if (el.open) openIds.add(el.dataset.id); else openIds.delete(el.dataset.id);
+    if (el.open) { openIds.add(el.dataset.id); isiDetail(el); } else openIds.delete(el.dataset.id);
   }, true);
   $('restore-file').addEventListener('change', e => {
     if (e.target.files[0]) restoreFrom(e.target.files[0]);
@@ -1351,7 +1390,7 @@
     if (saveTimer || (wz && wz.draft)) { e.preventDefault(); e.returnValue = ''; }
   });
 
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !window.BACA_CV_LOKAL) navigator.serviceWorker.register('sw.js').catch(() => {}); // tampilan tetap terbuka saat offline
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !window.BACA_CV_LOKAL) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service worker tidak terpasang:', e && e.message)); // tampilan tetap terbuka saat offline
 
   (async () => {
     try {

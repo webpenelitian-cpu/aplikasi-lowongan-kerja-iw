@@ -40,7 +40,7 @@
       db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) });
     } else {
       // Bila HR berhenti memakai mode offline, salinan lama di perangkat ikut dibersihkan.
-      if (hr) await F.clearIndexedDbPersistence(F.getFirestore(app)).catch(() => {});
+      if (hr) await F.clearIndexedDbPersistence(F.getFirestore(app)).catch(e => console.warn('Salinan data HR di perangkat belum terhapus:', e && e.code));
       db = F.getFirestore(app);
     }
   }
@@ -69,7 +69,7 @@
   async function signOut() {
     await A.signOut(auth);
     user = null;
-    if (persist) { await F.terminate(db); await F.clearIndexedDbPersistence(db).catch(() => {}); } // data pelamar tidak tertinggal di perangkat
+    if (persist) { await F.terminate(db); await F.clearIndexedDbPersistence(db).catch(e => console.warn('Salinan data HR di perangkat belum terhapus:', e && e.code)); } // data pelamar tidak tertinggal di perangkat
   }
   const jumlahTertunda = () => tertunda;
   const email = () => (user && user.email) || '';
@@ -179,9 +179,15 @@
       const kirim = batch.commit();
       if (navigator.onLine) { await kirim; continue; }
       // Offline: perubahan antre di perangkat dan dikirim otomatis saat tersambung.
-      if (!persist) { kirim.catch(() => {}); throw new Error('offline'); }
+      if (!persist) { kirim.catch(e => console.warn('Simpanan offline (tanpa salinan perangkat) tidak terkirim:', e && e.code)); throw new Error('offline'); }
       tertunda += 1;
-      kirim.catch(() => {}).finally(() => { tertunda -= 1; });
+      // Perubahan yang antre lalu ditolak server (misalnya hak akses dicabut) tidak boleh hilang diam-diam:
+      // dicatat dan diumumkan ke halaman agar HR memeriksa ulang (firebase/firebase-js-sdk: WriteBatch.commit
+      // menolak promise saat penulisan gagal di server).
+      kirim.catch(e => {
+        console.error('Perubahan offline ditolak server:', e && e.code); // hanya kode: pesan lengkap bisa memuat jalur dokumen berisi kode pelamar
+        root.dispatchEvent(new CustomEvent('cloud-gagal-kirim', { detail: { kode: (e && e.code) || '' } }));
+      }).finally(() => { tertunda -= 1; });
     }
   }
 

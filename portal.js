@@ -4,6 +4,7 @@
   // Tidak boleh tampil di dalam bingkai situs lain (mencegah clickjacking). GitHub Pages tidak bisa mengirim header X-Frame-Options.
   if (window.top !== window.self) { document.documentElement.innerHTML = ''; return; }
   const R = window.Rekrutmen, C = window.Cloud;
+  const URUT = new Intl.Collator().compare; // dipakai ulang; hasil sama dengan localeCompare tanpa argumen (mdn/content)
   const app = document.getElementById('app');
   const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const NET_ERROR = 'Tidak bisa tersambung ke server. Periksa koneksi internet lalu coba lagi.';
@@ -55,7 +56,7 @@
     setTitle('');
     // Daftar disimpan sebentar agar pindah halaman tidak membaca server lagi.
     if (Date.now() - dimuat > 60000) { semua = await C.listLowongan(); dimuat = Date.now(); }
-    semua = semua.filter(l => l.status !== 'draf').sort((a, b) => dibuka(b) - dibuka(a) || a.judul.localeCompare(b.judul));
+    semua = semua.filter(l => l.status !== 'draf').sort((a, b) => dibuka(b) - dibuka(a) || URUT(a.judul, b.judul));
     const lok = document.getElementById('lok'), pilih = saring.lok;
     lok.innerHTML = '<option value="">Semua lokasi</option>' + [...new Set(semua.map(l => l.lokasiKerja).filter(Boolean))].sort().map(x => `<option${x === pilih ? ' selected' : ''}>${esc(x)}</option>`).join('');
     app.innerHTML = `<div class="beranda"><section aria-labelledby="jumlah"><div class="result-head"><h2 id="jumlah" aria-live="polite"></h2><div id="chips" class="chips" role="group" aria-label="Saring status lowongan"></div></div><div id="hasil" class="results"></div></section>
@@ -329,7 +330,7 @@
   document.getElementById('cari').addEventListener('submit', e => { e.preventDefault(); saring.q = document.getElementById('q').value.trim(); daftar(); });
   document.getElementById('q').addEventListener('input', e => { saring.q = e.target.value.trim(); daftar(); });
   document.getElementById('lok').addEventListener('change', e => { saring.lok = e.target.value; daftar(); });
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !window.BACA_CV_LOKAL) navigator.serviceWorker.register('sw.js').catch(() => {}); // tampilan tetap terbuka saat offline
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !window.BACA_CV_LOKAL) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service worker tidak terpasang:', e && e.message)); // tampilan tetap terbuka saat offline
   app.addEventListener('click', e => {
     const c = e.target.closest('#chips [data-s]');
     if (!c) return;

@@ -1,6 +1,7 @@
 // Aturan tahapan seleksi dan penyusunan pengumuman. Tidak menyentuh tampilan.
 (function (root) {
   'use strict';
+  const URUT = new Intl.Collator().compare; // sama dengan localeCompare tanpa argumen, tanpa membuat Collator tiap perbandingan
 
   // Halaman ini tidak boleh dimuat di dalam situs lain (mencegah clickjacking; GitHub Pages tidak bisa memasang header).
   if (typeof window !== 'undefined' && window.top !== window.self) document.documentElement.innerHTML = '';
@@ -81,7 +82,7 @@
       const s = statusOf(k, tahapan[index]);
       g[s === 'lolos' ? 'lolos' : s === 'tidak' ? 'tidak' : 'belum'].push(k);
     });
-    const byNomor = (a, b) => String(a.nomor).localeCompare(String(b.nomor));
+    const byNomor = (a, b) => URUT(String(a.nomor), String(b.nomor));
     g.lolos.sort(byNomor); g.tidak.sort(byNomor); g.belum.sort(byNomor);
     return g;
   }
@@ -97,10 +98,13 @@
     return `${lowongan.kode}-${String(lowongan.nomorBerikut).padStart(3, '0')}`;
   }
 
+  // Objek Intl dibuat sekali lalu dipakai ulang (mdn/content: Date.prototype.toLocaleDateString dan
+  // String.prototype.localeCompare, bagian "Performance"). Teks dan urutan yang dihasilkan sama persis.
+  const FORMAT_TANGGAL = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
   function tanggalId(iso) {
     if (!iso) return '';
     const d = new Date(iso + 'T00:00:00');
-    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    return Number.isNaN(d.getTime()) ? '' : FORMAT_TANGGAL.format(d);
   }
 
   // nama(k) diberikan oleh pemanggil karena nama dibaca dari teks CV.
