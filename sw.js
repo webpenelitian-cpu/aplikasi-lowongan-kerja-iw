@@ -6,7 +6,7 @@ const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const LUAR = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.13.0/mammoth.browser.min.js',
   `${SDK}firebase-app.js`, `${SDK}firebase-firestore.js`, `${SDK}firebase-auth.js`, `${SDK}firebase-app-check.js`,
 ];
 // Alamat luar berversi tetap, jadi aman disajikan dari simpanan.

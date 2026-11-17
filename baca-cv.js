@@ -21,7 +21,7 @@
   const LOKAL = typeof root.BACA_CV_LOKAL === 'string' ? root.BACA_CV_LOKAL : '';
   const LIB = {
     pdf: { url: LOKAL ? `${LOKAL}pdf.min.js` : 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', sri: 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e', nama: 'pdfjsLib' },
-    docx: { url: LOKAL ? `${LOKAL}mammoth.browser.min.js` : 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', sri: 'sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz', nama: 'mammoth' },
+    docx: { url: LOKAL ? `${LOKAL}mammoth.browser.min.js` : 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.13.0/mammoth.browser.min.js', sri: 'sha384-8NWE3bZDrmRI4IePMoQaEoLhAQ1MmRMJkdNgnGiHRFanTqsFKr0TmK6aSZvFJ/PO', nama: 'mammoth' },
     // Dimuat di halaman sehingga pdf.js berjalan tanpa Web Worker, yang diblokir browser untuk file lokal.
     worker: { url: `${LOKAL}pdf.worker.min.js`, nama: 'pdfjsWorker' },
   };
