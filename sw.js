@@ -1,7 +1,7 @@
 // Service worker: menyimpan tampilan aplikasi agar tetap terbuka saat internet putus.
 // Data pelamar tidak pernah disimpan di sini; permintaan ke Firebase selalu langsung ke server.
-const CACHE = 'lowongan-kerja-v1';
-const INTI = ['./', 'index.html', 'hr.html', 'style.css', 'app.js', 'portal.js', 'baca-cv.js', 'cloud.js', 'firebase-config.js', 'rekrutmen.js', 'screening.js', 'templat-lowongan.js', 'manifest.webmanifest', 'ikon-192.png', 'ikon-512.png', 'fonts/inter-latin-wght-normal.woff2'];
+const CACHE = 'lowongan-kerja-v2'; // v2: font Inter dilepas; simpanan lama (berisi woff2) dihapus saat aktif
+const INTI = ['./', 'index.html', 'hr.html', 'style.css', 'app.js', 'portal.js', 'baca-cv.js', 'cloud.js', 'firebase-config.js', 'rekrutmen.js', 'screening.js', 'templat-lowongan.js', 'manifest.webmanifest', 'ikon-192.png', 'ikon-512.png'];
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const LUAR = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
