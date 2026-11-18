@@ -1,12 +1,18 @@
+/* global BacaCV */ // dari baca-cv.js (skrip biasa yang dimuat lebih dulu)
 // Tampilan dan alur kerja aplikasi lowongan. Aturan penilaian ada di screening.js,
 // aturan tahapan dan pengumuman ada di rekrutmen.js.
 (function () {
   'use strict';
   // Tidak boleh tampil di dalam bingkai situs lain (mencegah clickjacking). GitHub Pages tidak bisa mengirim header X-Frame-Options.
-  if (window.top !== window.self) { document.documentElement.innerHTML = ''; return; }
+  if (window.top !== window.self) { document.documentElement.replaceChildren(); return; }
   const S = window.Screening, R = window.Rekrutmen, C = window.Cloud, TL = window.TemplatLowongan;
   const $ = id => document.getElementById(id);
   const app = $('app');
+  const buat = R.buat; // membangun DOM tanpa mengurai HTML (lihat rekrutmen.js)
+  const isi = R.isi; // mengganti isi elemen; anak null/array diperlakukan seperti buat()
+  // Parser HTML membuang satu baris baru di awal <textarea>/<pre>; teks yang dipasang langsung dibuat sama.
+  const isiBlok = t => String(t ?? '').replace(/^\r?\n/, '');
+  const pesan = (el, teks) => el.replaceChildren(buat('div', { class: 'empty' }, teks));
 
   const REC = { lolos: 'Lolos', pertimbangkan: 'Pertimbangkan', cek: 'Perlu cek manual', tidak: 'Tidak lolos' };
   const MARK = { ok: 'Terpenuhi', partial: 'Sebagian', no: 'Tidak', unknown: 'Tidak terbaca' };
@@ -276,12 +282,18 @@
     const yrs = fs.map(f => f.exp.years).filter(y => y !== null);
     $('pool-ring').innerHTML = `${kpi('k3', [[semua.length, 'Anggota talent pool'], [yrs.length ? S.idn(Math.round(yrs.reduce((a, b) => a + b, 0) / yrs.length * 10) / 10) : '-', 'Rata-rata pengalaman (tahun)'], [rows.length, 'Sesuai saringan']])}
       <div class="grid2 mt"><section class="panel"><h2>Pendidikan</h2>${bars(lv, 'Belum ada anggota.')}</section><section class="panel"><h2>Pengalaman</h2>${bars(band, 'Belum ada anggota.')}</section></div>`;
-    box.innerHTML = rows.length ? rows.map(({ k, f, skor }) => {
+    // Anggota talent pool dibangun sebagai DOM: nama dan email pelamar dipasang sebagai teks/atribut, bukan markup.
+    if (!rows.length) { pesan(box, semua.length ? 'Tidak ada anggota yang cocok dengan saringan ini.' : 'Belum ada pelamar yang menyetujui talent pool. Pilihan ini ada di formulir lamaran.'); return; }
+    box.replaceChildren(...rows.map(({ k, f, skor }) => {
       const asal = db.lowongan.find(l => l.id === k.lowonganId), lvl = S.levelOf(f.level);
-      return `<article class="pool-row"><div class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)} · Melamar ${esc(asal.judul)} · ${esc(R.progressLabel(R.progress(k, asal.tahapan)))}</small><small>${esc([lvl && lvl.label, f.exp.years !== null && f.exp.years !== undefined ? `Sekitar ${S.idn(f.exp.years)} tahun` : ''].filter(Boolean).join(' · '))}</small></div>
-        ${skor && skor.rekomendasi ? `<div class="pool-skor"><b>${skor.score}</b><span class="badge b-${skor.rekomendasi}">${REC[skor.rekomendasi]}</span></div>` : ''}
-        <div class="inline">${f.email ? `<button type="button" class="ghost" data-act="pool-copy" data-v="${esc(f.email)}">Salin email</button>` : ''}<button type="button" class="ghost danger" data-act="pool-out" data-id="${esc(k.id)}">Keluarkan</button></div></article>`;
-    }).join('') : `<div class="empty">${semua.length ? 'Tidak ada anggota yang cocok dengan saringan ini.' : 'Belum ada pelamar yang menyetujui talent pool. Pilihan ini ada di formulir lamaran.'}</div>`;
+      return buat('article', { class: 'pool-row' },
+        buat('div', { class: 'who' }, buat('strong', null, namaOf(k)),
+          buat('small', null, `${k.nomor ?? ''} · Melamar ${asal.judul ?? ''} · ${R.progressLabel(R.progress(k, asal.tahapan))}`),
+          buat('small', null, [lvl && lvl.label, f.exp.years !== null && f.exp.years !== undefined ? `Sekitar ${S.idn(f.exp.years)} tahun` : ''].filter(Boolean).join(' · '))),
+        skor && skor.rekomendasi ? buat('div', { class: 'pool-skor' }, buat('b', null, skor.score), buat('span', { class: `badge b-${skor.rekomendasi}` }, REC[skor.rekomendasi])) : null,
+        buat('div', { class: 'inline' }, f.email ? buat('button', { type: 'button', class: 'ghost', 'data-act': 'pool-copy', 'data-v': f.email }, 'Salin email') : null,
+          buat('button', { type: 'button', class: 'ghost danger', 'data-act': 'pool-out', 'data-id': k.id }, 'Keluarkan')));
+    }));
   }
 
   function homeHtml() {
@@ -406,48 +418,56 @@
     </div>`;
   }
 
-  function factsHtml(f) {
-    if (!f) return '';
+  // Kartu pelamar dibangun sebagai DOM: nama, email, teks CV, catatan, dan riwayat pelamar dipasang sebagai teks, bukan markup.
+  function factsEl(f) {
+    if (!f) return null;
     const lvl = S.levelOf(f.level);
-    const cell = (k, v) => `<div><b>${k}</b><span>${esc(v || 'Tidak terbaca')}</span></div>`;
-    return `<div class="facts">${cell('Email', f.email)}${cell('Telepon', f.phone)}${cell('Pendidikan', lvl && lvl.label)}${cell('IPK', f.ipk === null ? '' : S.idn(f.ipk, 2))}${cell('Pengalaman', f.exp.years === null ? '' : `Sekitar ${S.idn(f.exp.years)} tahun`)}</div>`;
+    const cell = (k, v) => buat('div', null, buat('b', null, k), buat('span', null, v || 'Tidak terbaca'));
+    return buat('div', { class: 'facts' }, cell('Email', f.email), cell('Telepon', f.phone), cell('Pendidikan', lvl && lvl.label),
+      cell('IPK', f.ipk === null ? '' : S.idn(f.ipk, 2)), cell('Pengalaman', f.exp.years === null ? '' : `Sekitar ${S.idn(f.exp.years)} tahun`));
   }
 
-  function checkHtml(x) {
-    const bukti = x.bukti.slice(0, 4).map(b => `<span class="bukti">"${esc(b.snippet)}"</span>`).join('');
-    return `<li><span class="mark m-${x.status}">${MARK[x.status]}</span><div><strong>${esc(x.label)}</strong>${x.wajib ? '<span class="tag">wajib</span>' : ''}<span class="tag">bobot ${esc(x.bobot)}</span><br>${esc(x.detail)}${bukti}</div></li>`;
+  function checkEl(x) {
+    return buat('li', null, buat('span', { class: `mark m-${x.status}` }, MARK[x.status]),
+      buat('div', null, buat('strong', null, x.label), x.wajib ? buat('span', { class: 'tag' }, 'wajib') : null, buat('span', { class: 'tag' }, `bobot ${x.bobot ?? ''}`),
+        buat('br'), x.detail, x.bukti.slice(0, 4).map(b => buat('span', { class: 'bukti' }, `"${b.snippet ?? ''}"`))));
   }
 
-  function cardHtml(k, i, l, emailGanda) {
+  function cardEl(k, i, l, emailGanda) {
     const rec = recOf(k, l), r = resultOf(k, l);
     const score = r && r.score !== null ? r.score : null;
     const buka = openIds.has(k.id);
     // Isi kartu yang tertutup baru digambar saat dibuka (event toggle pada <details>; mdn/content: HTMLDetailsElement
     // toggle event). Dengan ratusan pelamar ini menghemat puluhan ribu elemen DOM; isinya sama persis saat dibuka.
-    return `<details class="card" data-id="${esc(k.id)}"${buka ? ' open' : ''}>
-      <summary>
-        <span class="rank">${i + 1}</span>
-        <span class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)} · ${esc(R.progressLabel(R.progress(k, l.tahapan)))}${k.talentPool ? ' · Setuju talent pool' : ''}</small></span>
-        <span class="score"><span>${score === null ? '-' : score}</span><span class="bar"><i style="width:${score === null ? 0 : score}%"></i></span></span>
-        ${rec ? `<span class="badge b-${rec}">${REC[rec]}</span>` : '<span class="badge b-none">Belum dinilai</span>'}
-      </summary>
-      <div class="detail"${buka ? '' : ' data-tunda="1"'}>${buka ? isiKartuHtml(k, l, emailGanda) : ''}</div>
-    </details>`;
+    const bar = buat('i'); bar.style.width = `${score === null ? 0 : score}%`;
+    const detail = buat('div', { class: 'detail', 'data-tunda': buka ? null : '1' }, buka ? isiKartuEl(k, l, emailGanda) : null);
+    return buat('details', { class: 'card', 'data-id': k.id, open: buka },
+      buat('summary', null,
+        buat('span', { class: 'rank' }, i + 1),
+        buat('span', { class: 'who' }, buat('strong', null, namaOf(k)),
+          buat('small', null, `${k.nomor ?? ''} · ${R.progressLabel(R.progress(k, l.tahapan))}${k.talentPool ? ' · Setuju talent pool' : ''}`)),
+        buat('span', { class: 'score' }, buat('span', null, score === null ? '-' : score), buat('span', { class: 'bar' }, bar)),
+        rec ? buat('span', { class: `badge b-${rec}` }, REC[rec]) : buat('span', { class: 'badge b-none' }, 'Belum dinilai')),
+      detail);
   }
 
-  function isiKartuHtml(k, l, emailGanda) {
+  function isiKartuEl(k, l, emailGanda) {
     const r = resultOf(k, l), f = factsOf(k);
     const alasan = k.error ? [k.error] : (r ? r.alasan : []);
-    return `
-        ${r && r.peringatan ? `<p class="warn">${esc(r.peringatan)}</p>` : ''}
-        ${alasan.length ? `<div class="reason"><strong>Alasan</strong><ul>${alasan.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>` : ''}
-        ${factsHtml(f)}
-        ${r && r.checks.length ? `<ul class="checks">${r.checks.map(checkHtml).join('')}</ul>` : ''}
-        ${f && f.email && emailGanda.has(f.email.toLowerCase()) ? '<p class="warn">Email ini dipakai lebih dari satu lamaran pada lowongan ini.</p>' : ''}
-        <div class="actions"><span class="note">File: ${esc(k.fileName)}${cloudOn ? ` · Kode cek hasil: ${esc(R.tampilKode(k.id))}` : ''}</span><button type="button" class="ghost" data-act="rm" data-id="${esc(k.id)}">Hapus pelamar ini</button></div>
-        <div class="field"><label for="n-${esc(k.id)}">Catatan penilaian</label><textarea id="n-${esc(k.id)}" rows="2" data-note="${esc(k.id)}" placeholder="Bukti yang mendukung keputusan, berkaitan dengan pekerjaan">${esc(k.catatan)}</textarea></div>
-        ${(k.jejak || []).length ? `<details class="raw"><summary>Riwayat keputusan</summary><ol class="jejak">${k.jejak.map(j => `<li>${esc(j.pada)} · ${esc(j.tahap)}: ${esc(j.hasil)}${j.oleh ? ` · ${esc(j.oleh)}` : ''}</li>`).join('')}</ol></details>` : ''}
-        ${f ? `<details class="raw"><summary>Lihat teks yang terbaca</summary><pre>${esc(f.text)}</pre></details>` : ''}`;
+    const catatan = buat('textarea', { id: `n-${k.id}`, rows: 2, 'data-note': k.id, placeholder: 'Bukti yang mendukung keputusan, berkaitan dengan pekerjaan' }, isiBlok(k.catatan));
+    return [
+      r && r.peringatan ? buat('p', { class: 'warn' }, r.peringatan) : null,
+      alasan.length ? buat('div', { class: 'reason' }, buat('strong', null, 'Alasan'), buat('ul', null, alasan.map(a => buat('li', null, a)))) : null,
+      factsEl(f),
+      r && r.checks.length ? buat('ul', { class: 'checks' }, r.checks.map(checkEl)) : null,
+      f && f.email && emailGanda.has(f.email.toLowerCase()) ? buat('p', { class: 'warn' }, 'Email ini dipakai lebih dari satu lamaran pada lowongan ini.') : null,
+      buat('div', { class: 'actions' }, buat('span', { class: 'note' }, `File: ${k.fileName ?? ''}${cloudOn ? ` · Kode cek hasil: ${R.tampilKode(k.id)}` : ''}`),
+        buat('button', { type: 'button', class: 'ghost', 'data-act': 'rm', 'data-id': k.id }, 'Hapus pelamar ini')),
+      buat('div', { class: 'field' }, buat('label', { for: `n-${k.id}` }, 'Catatan penilaian'), catatan),
+      (k.jejak || []).length ? buat('details', { class: 'raw' }, buat('summary', null, 'Riwayat keputusan'),
+        buat('ol', { class: 'jejak' }, k.jejak.map(j => buat('li', null, `${j.pada ?? ''} · ${j.tahap ?? ''}: ${j.hasil ?? ''}${j.oleh ? ` · ${j.oleh}` : ''}`)))) : null,
+      f ? buat('details', { class: 'raw' }, buat('summary', null, 'Lihat teks yang terbaca'), buat('pre', null, isiBlok(f.text))) : null,
+    ];
   }
 
   // Mengisi kartu yang baru dibuka. Peringatan email ganda dihitung dari seluruh pelamar lowongan ini, sama seperti saat digambar.
@@ -455,7 +475,7 @@
     const box = card.querySelector(':scope > .detail[data-tunda]');
     const l = current(), k = l && db.kandidat.find(x => x.id === card.dataset.id);
     if (!box || !k) return;
-    box.innerHTML = isiKartuHtml(k, l, emailGanda(pelamar(l.id)));
+    box.replaceChildren(...isiKartuEl(k, l, emailGanda(pelamar(l.id))).filter(Boolean));
     box.removeAttribute('data-tunda');
   }
 
@@ -464,14 +484,14 @@
     if (!list) return;
     const all = sortedCandidates(l);
     const count = k => all.filter(c => recOf(c, l) === k).length;
-    $('filters').innerHTML = [['semua', 'Semua', all.length]].concat(Object.keys(REC).map(k => [k, REC[k], count(k)]))
-      .map(([k, label, n]) => `<button type="button" class="chip" data-act="filter" data-f="${k}" aria-pressed="${filter === k}">${esc(label)} (${n})</button>`).join('');
+    $('filters').replaceChildren(...[['semua', 'Semua', all.length]].concat(Object.keys(REC).map(k => [k, REC[k], count(k)]))
+      .map(([k, label, n]) => buat('button', { type: 'button', class: 'chip', 'data-act': 'filter', 'data-f': k, 'aria-pressed': String(filter === k) }, `${label} (${n})`)));
     const q = query.trim().toLowerCase();
     const shown = all.filter(k => (filter === 'semua' || recOf(k, l) === filter) &&
       (!q || k.fileName.toLowerCase().includes(q) || String(k.nomor || '').toLowerCase().includes(q) || String(k.text || '').toLowerCase().includes(q)));
-    if (!all.length) list.innerHTML = '<div class="empty">Belum ada CV. Isi ketentuan, lalu unggah file CV.</div>';
-    else if (!shown.length) list.innerHTML = '<div class="empty">Tidak ada kandidat yang cocok dengan saringan ini.</div>';
-    else list.innerHTML = shown.map((k, i) => cardHtml(k, i, l, emailGanda(all))).join('');
+    if (!all.length) pesan(list, 'Belum ada CV. Isi ketentuan, lalu unggah file CV.');
+    else if (!shown.length) pesan(list, 'Tidak ada kandidat yang cocok dengan saringan ini.');
+    else list.replaceChildren(...shown.map((k, i) => cardEl(k, i, l, emailGanda(all))));
   }
 
   // Email yang dipakai lebih dari satu lamaran pada lowongan ini, dihitung sekali per gambar ulang (O(n)),
@@ -615,7 +635,7 @@
         <div class="inline"><div class="seg" role="group" aria-label="Tampilan tahapan"><button type="button" data-act="view-board" aria-pressed="${!view.tabel}">Papan</button><button type="button" data-act="view-table" aria-pressed="${!!view.tabel}">Checklist</button></div>
         <button type="button" class="ghost" data-act="apply-rec"${l.tahapan.length && pelamar(l.id).length ? '' : ' disabled'}>Isi ${esc(l.tahapan[0] ? l.tahapan[0].nama : 'tahap pertama')} dari rekomendasi</button></div></div>
       <p id="stage-note" class="note" role="status" hidden></p>
-      <div id="matrix">${stageView(l)}</div>
+      <div id="matrix"></div>
       <details class="panel"${view.atur ? ' open' : ''}><summary>Atur tahapan</summary>
         <p class="hint">Nama dan keterangan tampil di portal. Pelaksana dan target hari hanya untuk tim HR.</p>
         <ol class="stages">${l.tahapan.map((t, i) => `<li>
@@ -634,50 +654,58 @@
     </div>`;
   }
 
-  const stageView = l => (view.tabel ? matrixHtml(l) : boardHtml(l));
+  // Papan dan checklist tahapan dibangun sebagai DOM: nama dan nomor pelamar dipasang sebagai teks/atribut, bukan markup.
+  const kosongEl = teks => buat('div', { class: 'empty' }, teks);
+  const tombolTanda = (k, t, v, tekan, label) => buat('button', { type: 'button', class: v === 'lolos' ? 'ok' : 'no', 'data-act': 'mark', 'data-k': k.id, 'data-t': t.id, 'data-v': v, 'aria-pressed': String(tekan), 'aria-label': label }, v === 'lolos' ? '✓' : '✕');
 
   function boardCard(k, l, t) {
     const r = resultOf(k, l), skor = r && r.score !== null ? r.score : '-';
-    const who = esc(namaOf(k)), p = R.progress(k, l.tahapan);
-    const batal = p.state === 'gugur' ? `<button type="button" class="ghost start" data-act="mark" data-k="${esc(k.id)}" data-t="${esc(p.tahap.id)}" data-v="tidak" aria-label="Batalkan keputusan ${who}">Batalkan</button>` : '';
-    return `<li class="bcard"><strong>${who}</strong><small>${esc(k.nomor)} · Skor ${esc(skor)}${p.state === 'gugur' ? ` · ${esc(p.tahap.nama)}` : ''}</small>${batal}
-      ${t ? `<span class="tick">
-        <button type="button" class="ok" data-act="mark" data-k="${esc(k.id)}" data-t="${esc(t.id)}" data-v="lolos" aria-pressed="false" aria-label="${who} lolos ${esc(t.nama)}">&#10003;</button>
-        <button type="button" class="no" data-act="mark" data-k="${esc(k.id)}" data-t="${esc(t.id)}" data-v="tidak" aria-pressed="false" aria-label="${who} tidak lolos ${esc(t.nama)}">&#10005;</button></span>` : ''}</li>`;
+    const who = namaOf(k) ?? '', p = R.progress(k, l.tahapan);
+    return buat('li', { class: 'bcard' }, buat('strong', null, who),
+      buat('small', null, `${k.nomor ?? ''} · Skor ${skor}${p.state === 'gugur' ? ` · ${p.tahap.nama ?? ''}` : ''}`),
+      p.state === 'gugur' ? buat('button', { type: 'button', class: 'ghost start', 'data-act': 'mark', 'data-k': k.id, 'data-t': p.tahap.id, 'data-v': 'tidak', 'aria-label': `Batalkan keputusan ${who}` }, 'Batalkan') : null,
+      t ? buat('span', { class: 'tick' }, tombolTanda(k, t, 'lolos', false, `${who} lolos ${t.nama ?? ''}`), tombolTanda(k, t, 'tidak', false, `${who} tidak lolos ${t.nama ?? ''}`)) : null);
   }
 
   // Papan kandidat: tiap kolom berisi peserta yang sedang menunggu di tahap itu.
-  function boardHtml(l) {
+  function boardEl(l) {
     const list = pelamar(l.id);
-    if (!list.length) return '<div class="empty">Belum ada peserta. Unggah CV di tab Kandidat.</div>';
+    if (!list.length) return kosongEl('Belum ada peserta. Unggah CV di tab Kandidat.');
     const pr = k => R.progress(k, l.tahapan);
-    const col = (judul, items, t, cls) => `<section class="bcol ${cls || ''}"><h3>${esc(judul)} <span>${items.length}</span></h3><ul>${items.map(k => boardCard(k, l, t)).join('')}</ul></section>`;
-    return `<div class="board" role="group" aria-label="Peserta per tahap">${l.tahapan.map((t, i) => col(`${i + 1}. ${t.nama}`, list.filter(k => pr(k).state === 'proses' && pr(k).index === i), t)).join('')}
-      ${col('Lolos semua tahap', list.filter(k => pr(k).state === 'lolos'), null, 'b-ok')}${col('Tidak lolos', list.filter(k => pr(k).state === 'gugur'), null, 'b-no')}</div>`;
+    const col = (judul, items, t, cls) => buat('section', { class: `bcol ${cls || ''}` }, buat('h3', null, `${judul} `, buat('span', null, items.length)), buat('ul', null, items.map(k => boardCard(k, l, t))));
+    return buat('div', { class: 'board', role: 'group', 'aria-label': 'Peserta per tahap' },
+      l.tahapan.map((t, i) => col(`${i + 1}. ${t.nama ?? ''}`, list.filter(k => pr(k).state === 'proses' && pr(k).index === i), t)),
+      col('Lolos semua tahap', list.filter(k => pr(k).state === 'lolos'), null, 'b-ok'), col('Tidak lolos', list.filter(k => pr(k).state === 'gugur'), null, 'b-no'));
   }
 
   // Checklist: tiap peserta satu kartu, tahapnya berurutan ke bawah.
-  function matrixHtml(l) {
+  function matrixEl(l) {
     const list = pelamar(l.id).slice().sort((a, b) => {
       const pa = R.progress(a, l.tahapan), pb = R.progress(b, l.tahapan);
       const w = p => (p.state === 'gugur' ? -1 : p.index);
       return w(pb) - w(pa) || urutTeks(a.nomor, b.nomor);
     });
-    if (!list.length) return '<div class="empty">Belum ada peserta. Unggah CV di tab Kandidat.</div>';
-    if (!l.tahapan.length) return '<div class="empty">Tambahkan minimal satu tahap.</div>';
+    if (!list.length) return kosongEl('Belum ada peserta. Unggah CV di tab Kandidat.');
+    if (!l.tahapan.length) return kosongEl('Tambahkan minimal satu tahap.');
     const row = (k, t, i) => {
-      const s = R.statusOf(k, t), who = esc(namaOf(k)), st = esc(t.nama);
-      const aksi = R.reachable(k, l.tahapan, i) ? `<span class="tick">
-        <button type="button" class="ok" data-act="mark" data-k="${esc(k.id)}" data-t="${esc(t.id)}" data-v="lolos" aria-pressed="${s === 'lolos'}" aria-label="${who} lolos ${st}">&#10003;</button>
-        <button type="button" class="no" data-act="mark" data-k="${esc(k.id)}" data-t="${esc(t.id)}" data-v="tidak" aria-pressed="${s === 'tidak'}" aria-label="${who} tidak lolos ${st}">&#10005;</button>
-      </span>` : '<span class="na">Belum bisa dinilai</span>';
-      return `<li><span>${i + 1}. ${st}</span>${aksi}</li>`;
+      const s = R.statusOf(k, t), who = namaOf(k) ?? '', st = t.nama ?? '';
+      const aksi = R.reachable(k, l.tahapan, i)
+        ? buat('span', { class: 'tick' }, tombolTanda(k, t, 'lolos', s === 'lolos', `${who} lolos ${st}`), tombolTanda(k, t, 'tidak', s === 'tidak', `${who} tidak lolos ${st}`))
+        : buat('span', { class: 'na' }, 'Belum bisa dinilai');
+      return buat('li', null, buat('span', null, `${i + 1}. ${st}`), aksi);
     };
-    return `<div class="plist">${list.map(k => {
+    return buat('div', { class: 'plist' }, list.map(k => {
       const p = R.progress(k, l.tahapan);
-      return `<section class="pcard"><div class="pcard-h"><div><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)}</small></div><span class="st st-${p.state}">${esc(R.progressLabel(p))}</span></div>
-        <ol class="pstep">${l.tahapan.map((t, i) => row(k, t, i)).join('')}</ol></section>`;
-    }).join('')}</div>`;
+      return buat('section', { class: 'pcard' },
+        buat('div', { class: 'pcard-h' }, buat('div', null, buat('strong', null, namaOf(k)), buat('small', null, k.nomor)), buat('span', { class: `st st-${p.state}` }, R.progressLabel(p))),
+        buat('ol', { class: 'pstep' }, l.tahapan.map((t, i) => row(k, t, i))));
+    }));
+  }
+
+  // Satu-satunya tempat #matrix diisi (sebelumnya tiga penulisan innerHTML).
+  function gambarMatriks(l) {
+    const m = $('matrix');
+    if (m) m.replaceChildren(view.tabel ? matrixEl(l) : boardEl(l));
   }
 
   function reorder(l, id, delta) {
@@ -698,7 +726,7 @@
       else sisa++;
     });
     save();
-    $('matrix').innerHTML = stageView(l);
+    gambarMatriks(l);
     const n = $('stage-note');
     n.hidden = false;
     n.textContent = `${lolos} ditandai lolos, ${tidak} tidak lolos, ${sisa} perlu keputusan Anda. Periksa dulu sebelum diumumkan. Semua tanda masih bisa diubah.`;
@@ -741,25 +769,33 @@
     if (!box) return;
     const o = pengumumanState(l), index = l.tahapan.findIndex(t => t.id === view.tahapId), tahap = l.tahapan[index];
     const g = R.groupsAt(pelamar(l.id), l.tahapan, index);
+    // Pengumuman dibangun sebagai DOM: nomor dan nama peserta dipasang sebagai teks, bukan markup.
     const rows = (list, show) => (list.length
-      ? `<ol>${list.map(k => `<li><b>${esc(k.nomor)}</b>${show ? ` ${esc(namaOf(k))}` : ''}</li>`).join('')}</ol>` : '<p>Tidak ada.</p>');
-    box.innerHTML = `<h2>Pengumuman Hasil ${esc(tahap.nama)}</h2>
-      <p class="sub">${esc(l.judul)}${l.perusahaan ? ` · ${esc(l.perusahaan)}` : ''}${o.tanggal ? `<br>${esc(R.tanggalId(o.tanggal))}` : ''}</p>
-      <h3 class="pass">Dinyatakan lolos (${g.lolos.length} peserta)</h3>${rows(g.lolos, true)}
-      <h3 class="fail">Tidak lolos (${g.tidak.length} peserta)</h3>${rows(g.tidak, o.tampilkanNama)}
-      ${o.tindak ? `<h3>Tindak lanjut</h3><p class="pre">${esc(o.tindak)}</p>` : ''}
-      <p class="sub">Keputusan panitia seleksi bersifat final.</p>`;
+      ? buat('ol', null, list.map(k => buat('li', null, buat('b', null, k.nomor), show ? ` ${namaOf(k) ?? ''}` : null))) : buat('p', null, 'Tidak ada.'));
+    isi(box, buat('h2', null, `Pengumuman Hasil ${tahap.nama ?? ''}`),
+      buat('p', { class: 'sub' }, `${l.judul ?? ''}${l.perusahaan ? ` · ${l.perusahaan}` : ''}`, o.tanggal ? [buat('br'), R.tanggalId(o.tanggal)] : null),
+      buat('h3', { class: 'pass' }, `Dinyatakan lolos (${g.lolos.length} peserta)`), rows(g.lolos, true),
+      buat('h3', { class: 'fail' }, `Tidak lolos (${g.tidak.length} peserta)`), rows(g.tidak, o.tampilkanNama),
+      o.tindak ? [buat('h3', null, 'Tindak lanjut'), buat('p', { class: 'pre' }, o.tindak)] : null,
+      buat('p', { class: 'sub' }, 'Keputusan panitia seleksi bersifat final.'));
     const w = $('ann-warn');
     w.hidden = !g.belum.length;
     if (g.belum.length) w.textContent = `${g.belum.length} peserta belum diputuskan pada tahap ini dan belum masuk pengumuman. Lengkapi di tab Tahapan.`;
     const people = g.lolos.map(k => [k, 'lolos']).concat(g.tidak.map(k => [k, 'tidak']));
-    $('personal').innerHTML = `<h2>Pesan perorangan</h2><p class="hint">Salin lalu kirim sendiri lewat WhatsApp atau email. Isi pesan bisa diedit langsung. Tulis *seperti ini* untuk teks tebal. Aplikasi tidak mengirim apa pun.</p>
-      ${l.picNama ? '' : '<p class="warn">Isi Nama PIC agar pesan ditutup dengan nama penanda tangan.</p>'}
-      ${people.length ? `<ul class="people">${people.map(([k, s]) => {
-        const f = factsOf(k);
-        return `<li><span class="who"><strong>${esc(namaOf(k))}</strong><small>${esc(k.nomor)}${f && f.email ? ` · ${esc(f.email)}` : ''}</small></span><span class="badge b-${s}">${s === 'lolos' ? 'Lolos' : 'Tidak lolos'}</span><div class="field pesan-isi"><label for="m-${esc(k.id)}">Isi pesan untuk ${esc(namaOf(k))}</label><textarea id="m-${esc(k.id)}" rows="16" data-pesan="${esc(k.id)}" data-s="${s}">${esc(pesanUntuk(k, l, tahap, s, o))}</textarea></div>
-          <div class="aksi"><button type="button" class="ghost" data-act="copy-msg" data-f="wa" data-k="${esc(k.id)}" data-s="${s}">Salin untuk WhatsApp</button><button type="button" class="ghost" data-act="copy-msg" data-f="email" data-k="${esc(k.id)}" data-s="${s}">Salin untuk email</button><button type="button" class="ghost" data-act="reset-msg" data-k="${esc(k.id)}" data-s="${s}"${(o.pesan || {})[`${k.id}_${s}`] === undefined ? ' hidden' : ''}>Kembalikan teks otomatis</button></div></li>`;
-      }).join('')}</ul>` : '<p class="note">Belum ada peserta yang diputuskan pada tahap ini.</p>'}`;
+    // Pesan perorangan dibangun sebagai DOM: nama, email, dan isi pesan pelamar dipasang sebagai teks, bukan markup.
+    isi($('personal'), buat('h2', null, 'Pesan perorangan'),
+      buat('p', { class: 'hint' }, 'Salin lalu kirim sendiri lewat WhatsApp atau email. Isi pesan bisa diedit langsung. Tulis *seperti ini* untuk teks tebal. Aplikasi tidak mengirim apa pun.'),
+      l.picNama ? null : buat('p', { class: 'warn' }, 'Isi Nama PIC agar pesan ditutup dengan nama penanda tangan.'),
+      people.length ? buat('ul', { class: 'people' }, people.map(([k, s]) => {
+        const f = factsOf(k), tombol = (atribut, teks) => buat('button', { type: 'button', class: 'ghost', 'data-k': k.id, 'data-s': s, ...atribut }, teks);
+        return buat('li', null,
+          buat('span', { class: 'who' }, buat('strong', null, namaOf(k)), buat('small', null, `${k.nomor ?? ''}${f && f.email ? ` · ${f.email}` : ''}`)),
+          buat('span', { class: `badge b-${s}` }, s === 'lolos' ? 'Lolos' : 'Tidak lolos'),
+          buat('div', { class: 'field pesan-isi' }, buat('label', { for: `m-${k.id}` }, `Isi pesan untuk ${namaOf(k) ?? ''}`),
+            buat('textarea', { id: `m-${k.id}`, rows: 16, 'data-pesan': k.id, 'data-s': s }, isiBlok(pesanUntuk(k, l, tahap, s, o)))),
+          buat('div', { class: 'aksi' }, tombol({ 'data-act': 'copy-msg', 'data-f': 'wa' }, 'Salin untuk WhatsApp'), tombol({ 'data-act': 'copy-msg', 'data-f': 'email' }, 'Salin untuk email'),
+            tombol({ 'data-act': 'reset-msg', hidden: (o.pesan || {})[`${k.id}_${s}`] === undefined }, 'Kembalikan teks otomatis')));
+      })) : buat('p', { class: 'note' }, 'Belum ada peserta yang diputuskan pada tahap ini.'));
   }
 
   // Teks yang sudah diedit PIC disimpan per peserta dan per hasil, supaya tidak tertukar bila keputusan berubah.
@@ -775,10 +811,10 @@
         await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
       } else await navigator.clipboard.writeText(text);
       ok = true;
-    } catch (e) {
+    } catch {
       const t = document.createElement('textarea');
       t.value = text; document.body.appendChild(t); t.select();
-      try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+      try { ok = document.execCommand('copy'); } catch { ok = false; }
       t.remove();
     }
     const n = $('copy-note');
@@ -826,6 +862,7 @@
     if (view.tab === 'kandidat') { bindDrop(); renderList(l); }
     if (view.tab === 'ketentuan') updateWarning(l);
     if (view.tab === 'pengumuman') renderAnnounce(l);
+    if (view.tab === 'tahapan') gambarMatriks(l);
   }
 
   function bindDrop() {
@@ -950,7 +987,7 @@
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Gunakan logo berformat PNG, JPG, atau WebP.');
     if (file.size > 2 * 1024 * 1024) throw new Error('Ukuran logo maksimal 2 MB.');
     let img;
-    try { img = await createImageBitmap(file); } catch (e) { throw new Error('File logo rusak atau tidak bisa dibaca.'); }
+    try { img = await createImageBitmap(file); } catch (e) { throw new Error('File logo rusak atau tidak bisa dibaca.', { cause: e }); }
     if (img.width * img.height > 40e6) throw new Error('Dimensi gambar logo terlalu besar.');
     const skala = Math.min(1, 160 / Math.max(img.width, img.height));
     const c = document.createElement('canvas');
@@ -1008,7 +1045,7 @@
     else if (d.root) l.criteria[d.root] = val;
     else if (d.c) l.criteria[d.c][d.p] = val;
     else if (d.x !== undefined) l.criteria.tambahan[+d.x][d.p] = val;
-    else if (d.stage) { const t = l.tahapan.find(x => x.id === d.stage); if (t) { t[d.f] = val; if (e.type === 'change' && d.f === 'nama') { $('matrix').innerHTML = stageView(l); perbaruiTerbit(l); } } }
+    else if (d.stage) { const t = l.tahapan.find(x => x.id === d.stage); if (t) { t[d.f] = val; if (e.type === 'change' && d.f === 'nama') { gambarMatriks(l); perbaruiTerbit(l); } } }
     else if (d.note) { const k = db.kandidat.find(x => x.id === d.note); if (k) k.catatan = val; }
     else if (d.a) { pengumumanState(l)[d.a] = val; renderAnnounce(l); }
     else if (d.pesan) {
@@ -1096,7 +1133,7 @@
     csv() { if (izinUnduh()) downloadCsv(current()); },
     mark(el) {
       const l = current(), k = db.kandidat.find(x => x.id === el.dataset.k);
-      if (k && R.setTahap(k, l.tahapan, el.dataset.t, el.dataset.v)) { catatKeputusan(k, l, el.dataset.t); save(); $('matrix').innerHTML = stageView(l); }
+      if (k && R.setTahap(k, l.tahapan, el.dataset.t, el.dataset.v)) { catatKeputusan(k, l, el.dataset.t); save(); gambarMatriks(l); }
     },
     'apply-rec'() { applyRecommendations(current()); },
     'stage-add'() { const l = current(); l.tahapan.push({ id: R.uid(), nama: 'Tahap baru' }); save(); render(); },
@@ -1132,13 +1169,13 @@
         const n = $('copy-note');
         n.hidden = false;
         n.textContent = `Hasil ${tahap.nama} sudah terbit di portal.`;
-      } catch (e) {
+      } catch {
         showBanner('Pengumuman gagal diterbitkan. Periksa koneksi lalu coba lagi.');
       }
     },
     async refresh() {
       if (perluKoneksi('Memuat data terbaru')) return;
-      try { await muatBaru(); } catch (e) { showBanner('Gagal memuat data dari server.'); }
+      try { await muatBaru(); } catch { showBanner('Gagal memuat data dari server.'); }
     },
     async login() {
       const pilih = $('simpan-offline');
@@ -1301,18 +1338,19 @@
   async function bootCloud() {
     cloudOn = true;
     $('foot').textContent = 'Data pelamar tersimpan di server dan hanya bisa dibuka akun HR. Hapus lowongan yang masa simpan datanya sudah habis.';
-    app.innerHTML = '<div class="empty">Memuat...</div>';
+    pesan(app, 'Memuat...');
     let u;
-    try { u = await C.initHr(); } catch (e) { app.innerHTML = '<div class="empty">Tidak bisa tersambung ke server.</div>'; return; }
+    try { u = await C.initHr(); } catch { pesan(app, 'Tidak bisa tersambung ke server.'); return; }
     if (!u) {
       app.innerHTML = `<section class="panel login"><h1>Masuk akun HR</h1><p>Halaman ini khusus tim HR.</p><label class="consent"><input type="checkbox" id="simpan-offline"${C.simpanOffline() ? ' checked' : ''}> <span>Simpan data di perangkat ini agar tetap bisa dipakai saat internet putus. Data dihapus dari perangkat saat Anda keluar. Jangan centang di komputer bersama.</span></label><button type="button" class="start" data-act="login">Masuk dengan Google</button></section>`;
       return;
     }
     $('btn-logout').hidden = false;
     let admin;
-    try { admin = await C.isAdmin(); } catch (e) { app.innerHTML = '<div class="empty">Sedang offline dan data belum pernah disimpan di perangkat ini. Sambungkan internet lalu muat ulang.</div>'; return; }
+    try { admin = await C.isAdmin(); } catch { pesan(app, 'Sedang offline dan data belum pernah disimpan di perangkat ini. Sambungkan internet lalu muat ulang.'); return; }
     if (!admin) {
-      app.innerHTML = `<section class="panel login"><h1>Akun belum terdaftar sebagai HR</h1><p>Minta pengelola menambahkan dokumen di koleksi <code>admins</code> dengan id:</p><p><code>${esc(u.uid)}</code></p></section>`;
+      app.replaceChildren(buat('section', { class: 'panel login' }, buat('h1', null, 'Akun belum terdaftar sebagai HR'),
+        buat('p', null, 'Minta pengelola menambahkan dokumen di koleksi ', buat('code', null, 'admins'), ' dengan id:'), buat('p', null, buat('code', null, u.uid))));
       return;
     }
     $('btn-refresh').hidden = false;
@@ -1330,7 +1368,7 @@
     });
     kabarJaringan();
     jagaSesi();
-    try { await reloadCloud(); } catch (e) { app.innerHTML = '<div class="empty">Gagal memuat data dari server.</div>'; }
+    try { await reloadCloud(); } catch { pesan(app, 'Gagal memuat data dari server.'); }
   }
 
   async function restoreFrom(file) {
@@ -1339,7 +1377,7 @@
       if (data && data.format === 'lowongan-terenkripsi-1') {
         const pw = await askPassword('Masukkan kata sandi cadangan', 'Kata sandi yang dibuat saat mengunduh cadangan.');
         if (!pw) return;
-        try { data = JSON.parse(await R.dekripsi(data, pw)); } catch (e) { showBanner('Kata sandi salah atau berkas rusak.'); return; }
+        try { data = JSON.parse(await R.dekripsi(data, pw)); } catch { showBanner('Kata sandi salah atau berkas rusak.'); return; }
       }
       if (!R.validBackup(data)) throw new Error('bentuk');
       if (cloudOn) {
@@ -1357,7 +1395,7 @@
       await flush();
       showBanner('');
       render();
-    } catch (e) {
+    } catch {
       showBanner('Berkas cadangan tidak dikenali.');
     }
   }
@@ -1399,7 +1437,7 @@
         const saved = await loadDb();
         if (saved && R.validBackup(saved)) db = saved;
         if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-      } catch (e) {
+      } catch {
         showBanner('Browser ini tidak mengizinkan penyimpanan. Data akan hilang saat halaman ditutup, jadi unduh cadangan sebelum keluar.');
       }
       render();

@@ -1,3 +1,4 @@
+/* global pdfjsLib, mammoth */ // pustaka pdf.js dan mammoth, dimuat dinamis sebelum dipakai
 // Membaca teks dari file CV di browser. Dipakai portal pelamar dan aplikasi HR.
 (function (root) {
   'use strict';

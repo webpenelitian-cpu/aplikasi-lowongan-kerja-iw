@@ -4,7 +4,30 @@
   const URUT = new Intl.Collator().compare; // sama dengan localeCompare tanpa argumen, tanpa membuat Collator tiap perbandingan
 
   // Halaman ini tidak boleh dimuat di dalam situs lain (mencegah clickjacking; GitHub Pages tidak bisa memasang header).
-  if (typeof window !== 'undefined' && window.top !== window.self) document.documentElement.innerHTML = '';
+  if (typeof window !== 'undefined' && window.top !== window.self) document.documentElement.replaceChildren();
+
+  // Membangun elemen DOM tanpa mengurai HTML: teks selalu menjadi node teks, jadi data pelamar/HR tidak pernah ditafsirkan
+  // sebagai markup (pola hyperscript; mdn/content: Document.createElement, Element.append, Node.textContent).
+  // atribut: class -> className, nilai false/null/undefined dilewati, true -> atribut kosong. anak: teks, Node, atau larik keduanya.
+  function buat(tag, atribut, ...anak) {
+    const el = document.createElement(tag);
+    Object.entries(atribut || {}).forEach(([k, v]) => {
+      if (v === false || v === null || v === undefined || !atributAman(k, v)) return;
+      if (k === 'class') el.className = v; else el.setAttribute(k, v === true ? '' : String(v));
+    });
+    el.append(...rapikan(anak));
+    return el;
+  }
+  // Pertahanan berlapis: penangan on*, style, dan skema href/src selain tautan dalam (#), https, atau gambar data tidak pernah dipasang.
+  const URL_AMAN = /^(#|https:\/\/|data:image\/(png|jpeg|webp);base64,)/i;
+  const atributAman = (k, v) => !/^on/i.test(k) && k.toLowerCase() !== 'style' && (!/^(href|src)$/i.test(k) || URL_AMAN.test(String(v)));
+  // Anak kosong (null/undefined/false/'') dibuang dan array diratakan; replaceChildren bawaan justru menulisnya sebagai teks "null".
+  const rapikan = anak => anak.flat(Infinity).filter(x => x !== null && x !== undefined && x !== false && x !== '').map(x => (x instanceof Node ? x : String(x)));
+  // Mengganti seluruh isi elemen dengan aturan anak yang sama seperti buat().
+  function isi(el, ...anak) {
+    el.replaceChildren(...rapikan(anak));
+    return el;
+  }
 
   // Urutan mengikuti alur attract, assess, decide, pre-boarding. Pemeriksaan kesehatan ditaruh setelah penawaran bersyarat.
   const DEFAULT_TAHAP = [
@@ -307,5 +330,5 @@
     return new TextDecoder().decode(data);
   }
 
-  root.Rekrutmen = { SUMBER, ringkasSurvei, kinerjaScreening, kabarPelamar, pesanPolos, pesanHtml, logoSah, lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
+  root.Rekrutmen = { buat, isi, SUMBER, ringkasSurvei, kinerjaScreening, kabarPelamar, pesanPolos, pesanHtml, logoSah, lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
 })(typeof window !== 'undefined' ? window : globalThis);

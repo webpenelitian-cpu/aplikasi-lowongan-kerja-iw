@@ -10,8 +10,8 @@
   // Simpan data di perangkat untuk dipakai offline: hanya halaman HR, hanya bila HR memilihnya, dan dihapus saat keluar.
   const KUNCI_OFFLINE = 'hr-simpan-offline';
   let persist = false, tertunda = 0;
-  const simpanOffline = () => { try { return localStorage.getItem(KUNCI_OFFLINE) === '1'; } catch (e) { return false; } };
-  const aturSimpanOffline = v => { try { if (v) localStorage.setItem(KUNCI_OFFLINE, '1'); else localStorage.removeItem(KUNCI_OFFLINE); } catch (e) { /* mode privat */ } };
+  const simpanOffline = () => { try { return localStorage.getItem(KUNCI_OFFLINE) === '1'; } catch { return false; } };
+  const aturSimpanOffline = v => { try { if (v) localStorage.setItem(KUNCI_OFFLINE, '1'); else localStorage.removeItem(KUNCI_OFFLINE); } catch { /* mode privat */ } };
   const offlineAktif = () => persist;
   const perluMuatUlang = () => simpanOffline() !== persist; // dipanggil setelah masuk: database dibuka ulang dengan pilihan baru
 
@@ -130,24 +130,25 @@
     return { lowongan, kandidat: rows(lam).map(lamaranKe), survei };
   }
 
+  // Salinan dangkal tanpa kolom tertentu (kolom yang sengaja tidak dibawa ke tampilan).
+  const tanpa = (obj, ...kunci) => { const x = { ...obj }; kunci.forEach(k => delete x[k]); return x; };
+
   // Id survei adalah kode pelamar, jadi tidak dibawa ke tampilan HR. Survei tidak boleh menggagalkan pemuatan data utama.
   async function muatSurvei() {
     try {
-      return rows(await F.getDocs(F.collection(db, 'survei'))).map(({ id, dibuat, ...s }) => s);
-    } catch (e) { return []; }
+      return rows(await F.getDocs(F.collection(db, 'survei'))).map(s => tanpa(s, 'id', 'dibuat'));
+    } catch { return []; }
   }
 
   async function muatLowongan() {
     const [pub, hr] = await Promise.all(['lowongan', 'lowongan_hr'].map(c => F.getDocs(F.collection(db, c))));
     const hrById = new Map(rows(hr).map(x => [x.id, x]));
-    return rows(pub).map(l => {
-      const { tutupPada, ...rest } = l;
-      return { ...rest, ...(hrById.get(l.id) || {}) };
-    });
+    return rows(pub).map(l => ({ ...tanpa(l, 'tutupPada'), ...(hrById.get(l.id) || {}) }));
   }
 
   function lamaranKe(k) {
-    const { cvText, dibuat, diubah, persetujuan, ...rest } = k;
+    const { cvText, dibuat, diubah } = k;
+    const rest = tanpa(k, 'cvText', 'dibuat', 'diubah', 'persetujuan');
     return { tahap: {}, error: '', ...rest, text: cvText === undefined ? null : cvText, dibuatMs: dibuat && dibuat.toMillis ? dibuat.toMillis() : 0, diubahMs: diubah && diubah.toMillis ? diubah.toMillis() : 0 };
   }
 
