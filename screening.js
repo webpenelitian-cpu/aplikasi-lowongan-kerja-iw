@@ -232,15 +232,17 @@
   // Baris jabatan sering berada di atas CV dan tidak boleh terbaca sebagai nama.
   const JOB_TITLE = /\b(surveyor|engineer|engineering|drafter|arsitek|architect|manager|manajer|staff|staf|supervisor|officer|konsultan|consultant|teknik|estimator|inspector|inspektur|pelaksana|portfolio|portofolio|profile|profil)\b/i;
 
+  const SAMPUL_CV = /^(curriculum vitae|daftar riwayat hidup|riwayat hidup|resume|cv)$/i;
+  // Baris yang pasti bukan nama: terlalu pendek/panjang, memuat angka atau tanda, judul sampul, atau jabatan.
+  const bukanNama = l => l.length < 3 || l.length > 60 || /[@\d:<>=]/.test(l) || SAMPUL_CV.test(l) || JOB_TITLE.test(l);
+
   function detectName(text, fallback) {
     const labeled = /^\s*(?:nama(?: lengkap)?|full name|name)\s*:?[ \t]*\n?[ \t]*:?[ \t]*([^\n:@\d]{3,60})$/im.exec(text);
     if (labeled && !JOB_TITLE.test(labeled[1])) return labeled[1].trim();
     const lines = text.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 8);
     for (const l of lines) {
       if (headerType(l)) break; // nama selalu berada sebelum bagian pertama CV
-      if (l.length < 3 || l.length > 60 || /[@\d:<>=]/.test(l)) continue;
-      if (/^(curriculum vitae|daftar riwayat hidup|riwayat hidup|resume|cv)$/i.test(l) || JOB_TITLE.test(l)) continue;
-      if (/\p{L}/u.test(l)) return l;
+      if (!bukanNama(l) && /\p{L}/u.test(l)) return l;
     }
     return fallback;
   }
@@ -297,61 +299,61 @@
     return { id, label, bobot: num(cfg.bobot), wajib: !!cfg.wajib, status, nilai, detail, bukti: hit.map(h => ({ term: h.term, snippet: h.snippet })) };
   }
 
-  function buildChecks(f, c) {
-    const checks = [];
-    const eduText = f.sec.hasEdu ? f.sec.edu + '\n' + f.text : f.text;
-
+  function cekPendidikan(f, c) {
     const need = levelOf(c.pendidikan.level);
-    if (need) {
-      const have = levelOf(f.level);
-      const base = { id: 'pendidikan', label: `Pendidikan minimal ${need.label}`, bobot: num(c.pendidikan.bobot), wajib: !!c.pendidikan.wajib };
-      if (!have) checks.push({ ...base, status: 'unknown', nilai: 0, detail: 'Jenjang pendidikan tidak terbaca dari CV', bukti: [] });
-      else {
-        const ok = have.rank >= need.rank;
-        checks.push({ ...base, status: ok ? 'ok' : 'no', nilai: ok ? 1 : 0, detail: `Terbaca ${have.label}`, bukti: f.levelSnippet ? [{ term: have.label, snippet: f.levelSnippet }] : [] });
-      }
-    }
+    if (!need) return null;
+    const have = levelOf(f.level);
+    const base = { id: 'pendidikan', label: `Pendidikan minimal ${need.label}`, bobot: num(c.pendidikan.bobot), wajib: !!c.pendidikan.wajib };
+    if (!have) return { ...base, status: 'unknown', nilai: 0, detail: 'Jenjang pendidikan tidak terbaca dari CV', bukti: [] };
+    const ok = have.rank >= need.rank;
+    return { ...base, status: ok ? 'ok' : 'no', nilai: ok ? 1 : 0, detail: `Terbaca ${have.label}`, bukti: f.levelSnippet ? [{ term: have.label, snippet: f.levelSnippet }] : [] };
+  }
 
-    const jurusan = parseList(c.jurusan.items);
-    if (jurusan.length) checks.push(listCheck('jurusan', 'Jurusan', c.jurusan, jurusan, eduText, 'any'));
-
+  function cekIpk(f, c) {
     const minIpk = num(c.ipk.min);
-    if (minIpk > 0) {
-      const base = { id: 'ipk', label: `IPK minimal ${idn(minIpk, 2)}`, bobot: num(c.ipk.bobot), wajib: !!c.ipk.wajib, bukti: [] };
-      if (f.ipk === null) checks.push({ ...base, status: 'unknown', nilai: 0, detail: 'IPK tidak tercantum di CV' });
-      else {
-        const ok = f.ipk >= minIpk;
-        checks.push({ ...base, status: ok ? 'ok' : 'no', nilai: ok ? 1 : 0, detail: `Terbaca IPK ${idn(f.ipk, 2)}` });
-      }
-    }
+    if (!(minIpk > 0)) return null;
+    const base = { id: 'ipk', label: `IPK minimal ${idn(minIpk, 2)}`, bobot: num(c.ipk.bobot), wajib: !!c.ipk.wajib, bukti: [] };
+    if (f.ipk === null) return { ...base, status: 'unknown', nilai: 0, detail: 'IPK tidak tercantum di CV' };
+    const ok = f.ipk >= minIpk;
+    return { ...base, status: ok ? 'ok' : 'no', nilai: ok ? 1 : 0, detail: `Terbaca IPK ${idn(f.ipk, 2)}` };
+  }
 
+  // Asal angka pengalaman, ditambah pernyataan CV bila berbeda dari hasil hitung tanggal.
+  function sumberPengalaman(exp, y) {
+    const src = exp.source === 'tanggal' ? 'dihitung dari tanggal kerja' : 'dari pernyataan di CV, tanpa tanggal kerja';
+    const claim = exp.source === 'tanggal' && exp.claim !== null && exp.claim !== Math.round(y) ? `; CV menyatakan ${exp.claim} tahun` : '';
+    return src + claim;
+  }
+
+  function cekPengalaman(f, c) {
     const minYears = num(c.pengalaman.tahun);
-    if (minYears > 0) {
-      const base = { id: 'pengalaman', label: `Pengalaman minimal ${idn(minYears)} tahun`, bobot: num(c.pengalaman.bobot), wajib: !!c.pengalaman.wajib, bukti: [] };
-      const y = f.exp.years;
-      if (y === null) checks.push({ ...base, status: 'unknown', nilai: 0, detail: 'Lama pengalaman tidak terbaca dari CV' });
-      else {
-        const nilai = Math.min(1, y / minYears);
-        const src = f.exp.source === 'tanggal' ? 'dihitung dari tanggal kerja' : 'dari pernyataan di CV, tanpa tanggal kerja';
-        const claim = f.exp.source === 'tanggal' && f.exp.claim !== null && f.exp.claim !== Math.round(y) ? `; CV menyatakan ${f.exp.claim} tahun` : '';
-        checks.push({ ...base, status: nilai >= 1 ? 'ok' : (c.pengalaman.wajib || y === 0 ? 'no' : 'partial'), nilai, detail: `Sekitar ${idn(y)} tahun (${src}${claim})` });
-      }
-    }
+    if (!(minYears > 0)) return null;
+    const base = { id: 'pengalaman', label: `Pengalaman minimal ${idn(minYears)} tahun`, bobot: num(c.pengalaman.bobot), wajib: !!c.pengalaman.wajib, bukti: [] };
+    const y = f.exp.years;
+    if (y === null) return { ...base, status: 'unknown', nilai: 0, detail: 'Lama pengalaman tidak terbaca dari CV' };
+    const nilai = Math.min(1, y / minYears);
+    const kurang = c.pengalaman.wajib || y === 0 ? 'no' : 'partial';
+    return { ...base, status: nilai >= 1 ? 'ok' : kurang, nilai, detail: `Sekitar ${idn(y)} tahun (${sumberPengalaman(f.exp, y)})` };
+  }
 
-    const keahlian = parseList(c.keahlian.items);
-    if (keahlian.length) checks.push(listCheck('keahlian', 'Keahlian', c.keahlian, keahlian, f.text, 'all'));
-    const tambah = parseList(c.nilaiTambah.items);
-    if (tambah.length) checks.push(listCheck('nilaiTambah', 'Nilai tambah', { ...c.nilaiTambah, wajib: false }, tambah, f.text, 'all'));
-    const sert = parseList(c.sertifikasi.items);
-    if (sert.length) checks.push(listCheck('sertifikasi', 'Sertifikasi', c.sertifikasi, sert, f.text, 'any'));
-    const lokasi = parseList(c.lokasi.items);
-    if (lokasi.length) checks.push(listCheck('lokasi', 'Lokasi', c.lokasi, lokasi, f.text, 'any'));
+  // Ketentuan berupa daftar kata: [id, label, cfg, teks yang dicari, mode]. Jurusan selalu urutan pertama; daftar kosong menjadi null.
+  function cekDaftar(f, c, eduText) {
+    const daftar = [
+      ['jurusan', 'Jurusan', c.jurusan, eduText, 'any'],
+      ['keahlian', 'Keahlian', c.keahlian, f.text, 'all'],
+      ['nilaiTambah', 'Nilai tambah', { ...c.nilaiTambah, wajib: false }, f.text, 'all'],
+      ['sertifikasi', 'Sertifikasi', c.sertifikasi, f.text, 'any'],
+      ['lokasi', 'Lokasi', c.lokasi, f.text, 'any'],
+    ].map(([id, label, cfg, teks, mode]) => [id, label, cfg, parseList(cfg.items), teks, mode]);
+    (c.tambahan || []).forEach((t, i) => daftar.push(['tambahan' + i, t.label || 'Ketentuan tambahan', t, parseList(t.kata), f.text, 'any']));
+    return daftar.map(d => (d[3].length ? listCheck(...d) : null));
+  }
 
-    (c.tambahan || []).forEach((t, i) => {
-      const items = parseList(t.kata);
-      if (items.length) checks.push(listCheck('tambahan' + i, t.label || 'Ketentuan tambahan', t, items, f.text, 'any'));
-    });
-    return checks;
+  // Urutan pemeriksaan: pendidikan, jurusan, IPK, pengalaman, keahlian, nilai tambah, sertifikasi, lokasi, tambahan.
+  function buildChecks(f, c) {
+    const eduText = f.sec.hasEdu ? f.sec.edu + '\n' + f.text : f.text;
+    const [jurusan, ...lainnya] = cekDaftar(f, c, eduText);
+    return [cekPendidikan(f, c), jurusan, cekIpk(f, c), cekPengalaman(f, c), ...lainnya].filter(Boolean);
   }
 
   // Kata kunci yang diulang berlebihan menandakan CV sengaja diisi untuk mengelabui pencocokan.
@@ -397,27 +399,37 @@
   const cleanItem = s => s.replace(/^\s*(memiliki|mempunyai|punya|yang|dari|di|pada|dengan|seperti|antara lain|berpengalaman|program)\s+/i, '').replace(/[\s:.]+$/, '').trim();
   const splitItems = s => s.split(/,|\/|&|\bdan\b|\batau\b|\bserta\b/i).map(cleanItem).filter(x => x.length > 1);
 
+  const JENJANG_TEKS = { s1: 's1', s2: 's2', s3: 's3', d3: 'd3', d4: 's1', sma: 'sma', smk: 'sma', sarjana: 's1', diploma: 'd3' };
+  // Kata pembuka -> daftar tujuan. Urutan dipertahankan: jurusan, sertifikasi, lokasi, keahlian.
+  const DAFTAR_KETENTUAN = [
+    [/\b(?:jurusan|program studi|prodi)\b\s*:?\s*(.+)$/i, 'jurusan'],
+    [/\b(?:sertifikat|sertifikasi)\b\s*:?\s*(.+)$/i, 'sertifikasi'],
+    [/\b(?:domisili|berdomisili|penempatan|lokasi)\b\s*:?\s*(.+)$/i, 'lokasi'],
+    [/\b(?:menguasai|mahir|keahlian|kemampuan|skills?|memahami|familiar dengan)\b\s*:?\s*(.+)$/i, 'keahlian'],
+  ];
+
+  function bacaAngkaKetentuan(line, out) {
+    let m;
+    if ((m = /\b(?:minimal|minimum|min\.?|pendidikan|lulusan)\b[^\n]{0,20}?\b(S-?[123]|D-?[34]|SMA|SMK|sarjana|diploma)\b/i.exec(line))) {
+      out.level = JENJANG_TEKS[m[1].toLowerCase().replace('-', '')] || '';
+    }
+    if ((m = /\b(?:IPK|GPA)\b[^\d\n]{0,15}(\d[.,]\d{1,2})/i.exec(line))) out.ipk = m[1].replace(',', '.');
+    if ((m = /(?:pengalaman|experience)[^\n]{0,40}?(\d{1,2})\s*\+?\s*(?:tahun|thn|years?)/i.exec(line)) ||
+        (m = /(\d{1,2})\s*\+?\s*(?:tahun|thn|years?)\s*(?:pengalaman|experience)/i.exec(line))) out.tahun = m[1];
+  }
+
+  function bacaBarisKetentuan(line, out, push) {
+    if (PROTECTED.test(line)) { out.diabaikan.push(line); return; }
+    const tambah = /\b(nilai tambah|diutamakan|lebih disukai)\b\s*:?\s*(.+)$/i.exec(line);
+    if (tambah) { push(out.nilaiTambah, splitItems(tambah[2])); return; }
+    bacaAngkaKetentuan(line, out);
+    DAFTAR_KETENTUAN.forEach(([re, kunci]) => { const m = re.exec(line); if (m) push(out[kunci], splitItems(m[1])); });
+  }
+
   function parseKetentuan(input) {
     const out = { level: '', tahun: '', ipk: '', jurusan: [], keahlian: [], nilaiTambah: [], sertifikasi: [], lokasi: [], diabaikan: [] };
     const push = (arr, items) => items.forEach(i => { if (!arr.some(a => a.toLowerCase() === i.toLowerCase())) arr.push(i); });
-
-    normalize(input).split(/\n|;/).map(l => l.replace(/^[\s\-*•\d.)]+/, '').trim()).filter(Boolean).forEach(line => {
-      if (PROTECTED.test(line)) { out.diabaikan.push(line); return; }
-      let m;
-      if ((m = /\b(nilai tambah|diutamakan|lebih disukai)\b\s*:?\s*(.+)$/i.exec(line))) { push(out.nilaiTambah, splitItems(m[2])); return; }
-
-      if ((m = /\b(?:minimal|minimum|min\.?|pendidikan|lulusan)\b[^\n]{0,20}?\b(S-?[123]|D-?[34]|SMA|SMK|sarjana|diploma)\b/i.exec(line))) {
-        const v = m[1].toLowerCase().replace('-', '');
-        out.level = { s1: 's1', s2: 's2', s3: 's3', d3: 'd3', d4: 's1', sma: 'sma', smk: 'sma', sarjana: 's1', diploma: 'd3' }[v] || '';
-      }
-      if ((m = /\b(?:IPK|GPA)\b[^\d\n]{0,15}(\d[.,]\d{1,2})/i.exec(line))) out.ipk = m[1].replace(',', '.');
-      if ((m = /(?:pengalaman|experience)[^\n]{0,40}?(\d{1,2})\s*\+?\s*(?:tahun|thn|years?)/i.exec(line)) ||
-          (m = /(\d{1,2})\s*\+?\s*(?:tahun|thn|years?)\s*(?:pengalaman|experience)/i.exec(line))) out.tahun = m[1];
-      if ((m = /\b(?:jurusan|program studi|prodi)\b\s*:?\s*(.+)$/i.exec(line))) push(out.jurusan, splitItems(m[1]));
-      if ((m = /\b(?:sertifikat|sertifikasi)\b\s*:?\s*(.+)$/i.exec(line))) push(out.sertifikasi, splitItems(m[1]));
-      if ((m = /\b(?:domisili|berdomisili|penempatan|lokasi)\b\s*:?\s*(.+)$/i.exec(line))) push(out.lokasi, splitItems(m[1]));
-      if ((m = /\b(?:menguasai|mahir|keahlian|kemampuan|skills?|memahami|familiar dengan)\b\s*:?\s*(.+)$/i.exec(line))) push(out.keahlian, splitItems(m[1]));
-    });
+    normalize(input).split(/\n|;/).map(l => l.replace(/^[\s\-*•\d.)]+/, '').trim()).filter(Boolean).forEach(line => bacaBarisKetentuan(line, out, push));
     return out;
   }
 

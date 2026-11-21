@@ -62,23 +62,34 @@
     }).join('\n');
   }
 
-  // Mencari celah vertikal di tengah halaman. Boleh dilintasi sedikit baris lebar seperti nama atau judul.
-  function findGutter(items, width) {
-    if (items.length < 16) return null;
-    const BIN = 4, bins = new Array(Math.ceil(width / BIN)).fill(0);
+  const BIN_KOLOM = 4;
+  // Jumlah potongan teks yang melintasi tiap pita selebar BIN_KOLOM.
+  function histogramKolom(items, width) {
+    const bins = new Array(Math.ceil(width / BIN_KOLOM)).fill(0);
     items.forEach(i => {
-      for (let b = Math.floor(i.x / BIN); b <= Math.floor(i.end / BIN) && b < bins.length; b++) if (b >= 0) bins[b]++;
+      for (let b = Math.floor(i.x / BIN_KOLOM); b <= Math.floor(i.end / BIN_KOLOM) && b < bins.length; b++) if (b >= 0) bins[b]++;
     });
-    const limit = Math.max(2, items.length * 0.08);
-    const from = Math.floor(width * 0.2 / BIN), to = Math.ceil(width * 0.8 / BIN);
+    return bins;
+  }
+
+  // Rentang pita berurutan terpanjang yang dilintasi paling banyak `limit` potongan: [awal, akhir] atau null.
+  function celahTerlebar(bins, from, to, limit) {
     let best = null, start = null;
     for (let b = from; b <= to; b++) {
       if (bins[b] <= limit) { if (start === null) start = b; continue; }
       if (start !== null && (!best || b - start > best[1] - best[0])) best = [start, b];
       start = null;
     }
-    if (!best || (best[1] - best[0]) * BIN < 12) return null;
-    const g = (best[0] + best[1]) / 2 * BIN;
+    return best;
+  }
+
+  // Mencari celah vertikal di tengah halaman. Boleh dilintasi sedikit baris lebar seperti nama atau judul.
+  function findGutter(items, width) {
+    if (items.length < 16) return null;
+    const limit = Math.max(2, items.length * 0.08);
+    const best = celahTerlebar(histogramKolom(items, width), Math.floor(width * 0.2 / BIN_KOLOM), Math.ceil(width * 0.8 / BIN_KOLOM), limit);
+    if (!best || (best[1] - best[0]) * BIN_KOLOM < 12) return null;
+    const g = (best[0] + best[1]) / 2 * BIN_KOLOM;
     const left = new Set(items.filter(i => i.end <= g).map(i => Math.round(i.y)));
     const right = new Set(items.filter(i => i.x >= g).map(i => Math.round(i.y)));
     return left.size >= 8 && right.size >= 8 ? g : null;

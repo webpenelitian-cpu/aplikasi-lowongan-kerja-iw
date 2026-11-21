@@ -29,6 +29,30 @@
     return el;
   }
 
+  // Templat HTML aman (pola tagged template, seperti lit-html): setiap nilai yang disisipkan di-escape otomatis.
+  // Hanya potongan yang juga dibuat dengan html`` disisipkan apa adanya; larik digabung tanpa pemisah.
+  const ESC_HTML = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  class Html { constructor(s) { this.s = s; Object.freeze(this); } toString() { return this.s; } }
+  const sisipan = v => {
+    if (v instanceof Html) return v.s;
+    if (Array.isArray(v)) return v.map(sisipan).join('');
+    return v === null || v === undefined ? '' : String(v).replace(/[&<>"']/g, c => ESC_HTML[c]);
+  };
+  // Hanya boleh dipanggil sebagai tagged template (larik bagian punya .raw), bukan html([teks]) dengan teks buatan.
+  const html = (bagian, ...nilai) => {
+    if (!Array.isArray(bagian) || !Array.isArray(bagian.raw)) throw new TypeError('html hanya dipakai sebagai templat html``');
+    return new Html(bagian.reduce((a, s, i) => a + sisipan(nilai[i - 1]) + s));
+  };
+  // Memasang templat ke elemen tanpa innerHTML. Teks mentah ditolak supaya markup hanya bisa datang dari html``.
+  // DOMParser tidak menjalankan skrip; hasilnya dipindah ke elemen tujuan (mdn/content: DOMParser.parseFromString).
+  // Atribut penangan peristiwa tetap berlaku seperti pada innerHTML, jadi perlindungannya adalah escape otomatis html``.
+  function pasang(el, h) {
+    if (!(h instanceof Html)) throw new TypeError('pasang() hanya menerima templat html``');
+    const doc = new DOMParser().parseFromString(`<!doctype html><html><body>${h.s}</body></html>`, 'text/html');
+    el.replaceChildren(...doc.body.childNodes);
+    return el;
+  }
+
   // Urutan mengikuti alur attract, assess, decide, pre-boarding. Pemeriksaan kesehatan ditaruh setelah penawaran bersyarat.
   const DEFAULT_TAHAP = [
     { nama: 'Seleksi Administrasi', keterangan: 'Tim HR memeriksa kesesuaian CV dengan persyaratan jabatan.', pelaksana: 'Tim HR', targetHari: 5 },
@@ -145,33 +169,41 @@
     return parts.join('\n');
   }
 
-  // Teks tebal ditulis *seperti ini*: langsung tebal di WhatsApp, dan diubah ke HTML untuk email.
-  function personalMessage(k, l, tahap, status, opts, namaPeserta) {
-    const pt = l.perusahaan ? ` di *${l.perusahaan}*` : '';
+  function isiLolos(baris, l, tahap, opts, pt) {
     const akhir = (l.tahapan || []).length && l.tahapan[l.tahapan.length - 1].id === tahap.id;
-    const baris = [`Yth. Sdr./Sdri. *${namaPeserta}*`, `Nomor peserta: ${k.nomor}`];
-    if (opts.tanggal) baris.push(`Tanggal: ${tanggalId(opts.tanggal)}`);
-    baris.push('', `Perihal: *Hasil Tahap ${tahap.nama} untuk Posisi ${l.judul}*`, '', 'Dengan hormat,', '');
-    if (status === 'lolos') {
-      baris.push(`Terima kasih atas partisipasi Anda dalam proses seleksi untuk posisi *${l.judul}*${pt}.`, '');
-      baris.push(akhir
-        ? `Berdasarkan hasil penilaian, dengan senang hati kami sampaikan bahwa Anda dinyatakan *LOLOS* seluruh tahapan seleksi, hingga tahap *${tahap.nama}*.`
-        : `Berdasarkan hasil penilaian, dengan senang hati kami sampaikan bahwa Anda dinyatakan *LOLOS* pada tahap *${tahap.nama}*.`, '');
-      if (opts.tindak) baris.push('*Tindak lanjut:*', String(opts.tindak).replace(/\n{2,}/g, '\n').trim(), '');
-      baris.push('Mohon konfirmasi penerimaan pesan ini dengan membalasnya.');
-      if (l.kontak) baris.push(`Informasi lebih lanjut dapat ditanyakan melalui ${l.kontak}.`);
-      baris.push('', 'Seluruh proses seleksi tidak dipungut biaya apa pun. Mohon abaikan pihak yang meminta pembayaran atas nama perusahaan kami.');
-    } else {
-      baris.push(`Terima kasih atas waktu dan minat Anda mengikuti proses seleksi untuk posisi *${l.judul}*${pt}.`, '');
-      baris.push(`Setelah melalui proses penilaian, dengan berat hati kami sampaikan bahwa Anda *belum dapat melanjutkan* ke tahap berikutnya setelah tahap *${tahap.nama}*.`, '');
-      baris.push('Keputusan ini tidak mengurangi penghargaan kami atas kemampuan dan pengalaman Anda. Semoga Anda sukses dalam langkah karier selanjutnya.');
-      if (k.talentPool) baris.push('', 'Sesuai persetujuan Anda, data Anda tetap kami simpan untuk ditawari lowongan lain yang sesuai selama masa simpan.');
-      if (l.kontak) baris.push('', `Pertanyaan, keberatan, atau permintaan terkait data pribadi Anda dapat disampaikan melalui ${l.kontak}.`);
-    }
+    baris.push(`Terima kasih atas partisipasi Anda dalam proses seleksi untuk posisi *${l.judul}*${pt}.`, '');
+    baris.push(akhir
+      ? `Berdasarkan hasil penilaian, dengan senang hati kami sampaikan bahwa Anda dinyatakan *LOLOS* seluruh tahapan seleksi, hingga tahap *${tahap.nama}*.`
+      : `Berdasarkan hasil penilaian, dengan senang hati kami sampaikan bahwa Anda dinyatakan *LOLOS* pada tahap *${tahap.nama}*.`, '');
+    if (opts.tindak) baris.push('*Tindak lanjut:*', String(opts.tindak).replace(/\n{2,}/g, '\n').trim(), '');
+    baris.push('Mohon konfirmasi penerimaan pesan ini dengan membalasnya.');
+    if (l.kontak) baris.push(`Informasi lebih lanjut dapat ditanyakan melalui ${l.kontak}.`);
+    baris.push('', 'Seluruh proses seleksi tidak dipungut biaya apa pun. Mohon abaikan pihak yang meminta pembayaran atas nama perusahaan kami.');
+  }
+
+  function isiTidakLolos(baris, k, l, tahap, pt) {
+    baris.push(`Terima kasih atas waktu dan minat Anda mengikuti proses seleksi untuk posisi *${l.judul}*${pt}.`, '');
+    baris.push(`Setelah melalui proses penilaian, dengan berat hati kami sampaikan bahwa Anda *belum dapat melanjutkan* ke tahap berikutnya setelah tahap *${tahap.nama}*.`, '');
+    baris.push('Keputusan ini tidak mengurangi penghargaan kami atas kemampuan dan pengalaman Anda. Semoga Anda sukses dalam langkah karier selanjutnya.');
+    if (k.talentPool) baris.push('', 'Sesuai persetujuan Anda, data Anda tetap kami simpan untuk ditawari lowongan lain yang sesuai selama masa simpan.');
+    if (l.kontak) baris.push('', `Pertanyaan, keberatan, atau permintaan terkait data pribadi Anda dapat disampaikan melalui ${l.kontak}.`);
+  }
+
+  function penutupPesan(baris, l) {
     baris.push('', 'Demikian kami sampaikan. Atas perhatian Anda, kami ucapkan terima kasih.', '', 'Hormat kami,', '');
     if (l.picNama) baris.push(`*${l.picNama}*`);
     if (l.picJabatan) baris.push(l.picJabatan);
     baris.push(l.perusahaan ? `*${l.perusahaan}*` : 'Tim Rekrutmen');
+  }
+
+  // Teks tebal ditulis *seperti ini*: langsung tebal di WhatsApp, dan diubah ke HTML untuk email.
+  function personalMessage(k, l, tahap, status, opts, namaPeserta) {
+    const pt = l.perusahaan ? ` di *${l.perusahaan}*` : '';
+    const baris = [`Yth. Sdr./Sdri. *${namaPeserta}*`, `Nomor peserta: ${k.nomor}`];
+    if (opts.tanggal) baris.push(`Tanggal: ${tanggalId(opts.tanggal)}`);
+    baris.push('', `Perihal: *Hasil Tahap ${tahap.nama} untuk Posisi ${l.judul}*`, '', 'Dengan hormat,', '');
+    if (status === 'lolos') isiLolos(baris, l, tahap, opts, pt); else isiTidakLolos(baris, k, l, tahap, pt);
+    penutupPesan(baris, l);
     return baris.join('\n');
   }
 
@@ -268,33 +300,36 @@
 
   const hasilAwal = (k, l) => [`hasil/${k.id}`, { nomor: k.nomor, posisi: l.judul, perusahaan: l.perusahaan || '', lowonganId: l.id, kontak: l.kontak || '', status: 'proses', tahap: '', riwayat: [], alur: (l.tahapan || []).map(t => t.nama), pesan: '' }];
 
+  // Kolom teks yang kosong disimpan sebagai '' (urutan kunci dipertahankan).
+  const teksAtauKosong = (src, kunci) => Object.fromEntries(kunci.map(k => [k, src[k] || '']));
+  const KOLOM_HR = ['hapusPada', 'picNama', 'picJabatan', 'permintaanNomor', 'permintaanUnit', 'permintaanJumlah', 'pembelajaran',
+    'permintaanJenis', 'permintaanTanggal', 'terisiTanggal', 'saluran'];
+  const docLowongan = l => ({
+    judul: l.judul, ...teksAtauKosong(l, ['perusahaan', 'logo', 'lokasiKerja', 'tenggat']),
+    tutupPada: l.tenggat ? `${l.tenggat}T23:59:59+07:00` : '2100-01-01T00:00:00+07:00',
+    ...teksAtauKosong(l, ['deskripsi', 'tentang', 'kompensasi', 'persyaratan']), status: l.status || 'buka',
+    ...teksAtauKosong(l, ['kontak', 'retensi']), contoh: !!l.contoh,
+    alur: (l.tahapan || []).map(t => ({ nama: t.nama, keterangan: t.keterangan || '' })),
+  });
+  const docLowonganHr = l => ({
+    criteria: l.criteria, tahapan: l.tahapan, pengumuman: l.pengumuman || {},
+    ...teksAtauKosong(l, ['kode']), terbit: l.terbit || {}, ...teksAtauKosong(l, KOLOM_HR), preboarding: l.preboarding || {},
+  });
+  const docLamaran = k => ({
+    lowonganId: k.lowonganId, ...teksAtauKosong(k, ['nomor', 'fileName']), size: k.size || 0, error: k.error || '',
+    cvText: k.text === undefined ? null : k.text, tahap: k.tahap || {},
+    ...teksAtauKosong(k, ['nama', 'email', 'telepon', 'catatan']), jejak: k.jejak || [], talentPool: !!k.talentPool, sumber: k.sumber || '',
+  });
+
   // Memecah data aplikasi menjadi dokumen Firestore. Bagian publik dan bagian khusus HR sengaja dipisah.
   function docsFromDb(db) {
     const out = new Map();
     const clean = v => JSON.parse(JSON.stringify(v));
     db.lowongan.forEach(l => {
-      out.set(`lowongan/${l.id}`, clean({
-        judul: l.judul, perusahaan: l.perusahaan || '', logo: l.logo || '', lokasiKerja: l.lokasiKerja || '', tenggat: l.tenggat || '',
-        tutupPada: l.tenggat ? `${l.tenggat}T23:59:59+07:00` : '2100-01-01T00:00:00+07:00',
-        deskripsi: l.deskripsi || '', tentang: l.tentang || '', kompensasi: l.kompensasi || '', persyaratan: l.persyaratan || '', status: l.status || 'buka',
-        kontak: l.kontak || '', retensi: l.retensi || '', contoh: !!l.contoh,
-        alur: (l.tahapan || []).map(t => ({ nama: t.nama, keterangan: t.keterangan || '' })),
-      }));
-      out.set(`lowongan_hr/${l.id}`, clean({
-        criteria: l.criteria, tahapan: l.tahapan, pengumuman: l.pengumuman || {},
-        kode: l.kode || '', terbit: l.terbit || {}, hapusPada: l.hapusPada || '', picNama: l.picNama || '', picJabatan: l.picJabatan || '',
-        permintaanNomor: l.permintaanNomor || '', permintaanUnit: l.permintaanUnit || '', permintaanJumlah: l.permintaanJumlah || '', pembelajaran: l.pembelajaran || '',
-        permintaanJenis: l.permintaanJenis || '', permintaanTanggal: l.permintaanTanggal || '', terisiTanggal: l.terisiTanggal || '', saluran: l.saluran || '', preboarding: l.preboarding || {},
-      }));
+      out.set(`lowongan/${l.id}`, clean(docLowongan(l)));
+      out.set(`lowongan_hr/${l.id}`, clean(docLowonganHr(l)));
     });
-    db.kandidat.forEach(k => {
-      out.set(`lamaran/${k.id}`, clean({
-        lowonganId: k.lowonganId, nomor: k.nomor || '', fileName: k.fileName || '', size: k.size || 0, error: k.error || '',
-        cvText: k.text === undefined ? null : k.text, tahap: k.tahap || {},
-        nama: k.nama || '', email: k.email || '', telepon: k.telepon || '',
-        catatan: k.catatan || '', jejak: k.jejak || [], talentPool: !!k.talentPool, sumber: k.sumber || '',
-      }));
-    });
+    db.kandidat.forEach(k => out.set(`lamaran/${k.id}`, clean(docLamaran(k))));
     return out;
   }
 
@@ -330,5 +365,5 @@
     return new TextDecoder().decode(data);
   }
 
-  root.Rekrutmen = { buat, isi, SUMBER, ringkasSurvei, kinerjaScreening, kabarPelamar, pesanPolos, pesanHtml, logoSah, lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
+  root.Rekrutmen = { buat, isi, html, pasang, SUMBER, ringkasSurvei, kinerjaScreening, kabarPelamar, pesanPolos, pesanHtml, logoSah, lewatMasaSimpan, enkripsi, dekripsi, contohLowongan, funnel, buatKode, normalKode, tampilKode, publishPayload, hasilAwal, docsFromDb, followDeletes, DEFAULT_TAHAP, uid, newTahapan, statusOf, reachable, progress, progressLabel, normalize, setTahap, groupsAt, kodeLowongan, nextNomor, tanggalId, announcementText, personalMessage, validBackup };
 })(typeof window !== 'undefined' ? window : globalThis);

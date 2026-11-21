@@ -6,6 +6,7 @@
   if (window.top !== window.self) { document.documentElement.replaceChildren(); return; }
   const R = window.Rekrutmen, C = window.Cloud;
   const buat = R.buat; // membangun DOM tanpa mengurai HTML (lihat rekrutmen.js)
+  const html = R.html, pasang = R.pasang; // templat HTML statis, dipasang tanpa innerHTML
   const pesan = (el, teks, kelas = 'empty') => el.replaceChildren(buat(kelas === 'empty' ? 'div' : 'p', { class: kelas }, teks));
   const URUT = new Intl.Collator().compare; // dipakai ulang; hasil sama dengan localeCompare tanpa argumen (mdn/content)
   const app = document.getElementById('app');
@@ -67,13 +68,13 @@
     semua = semua.filter(l => l.status !== 'draf').sort((a, b) => dibuka(b) - dibuka(a) || URUT(a.judul, b.judul));
     const lok = document.getElementById('lok'), pilih = saring.lok;
     lok.replaceChildren(buat('option', { value: '' }, 'Semua lokasi'), ...[...new Set(semua.map(l => l.lokasiKerja).filter(Boolean))].sort().map(x => buat('option', { selected: x === pilih }, x)));
-    app.innerHTML = `<div class="beranda"><section aria-labelledby="jumlah"><div class="result-head"><h2 id="jumlah" aria-live="polite"></h2><div id="chips" class="chips" role="group" aria-label="Saring status lowongan"></div></div><div id="hasil" class="results"></div></section>
+    pasang(app, html`<div class="beranda"><section aria-labelledby="jumlah"><div class="result-head"><h2 id="jumlah" aria-live="polite"></h2><div id="chips" class="chips" role="group" aria-label="Saring status lowongan"></div></div><div id="hasil" class="results"></div></section>
       <aside class="trust" aria-label="Informasi pelamar">
         <div><strong>Tanpa biaya</strong>Melamar dan mengikuti seleksi tidak dipungut biaya.</div>
         <div><strong>Kesempatan setara</strong>Penilaian berdasarkan kemampuan yang dibutuhkan pekerjaan.</div>
         <div><strong>Hasil transparan</strong>Pantau hasil tiap tahap dengan kode lamaran Anda.</div>
         <a class="linkbtn" href="#/cek">Cek hasil seleksi</a>
-      </aside></div>`;
+      </aside></div>`);
     daftar();
   }
 
@@ -119,33 +120,42 @@
       buat('button', { type: 'submit', class: 'start' }, 'Kirim lamaran'));
   }
 
+  // Pesan pengganti formulir bila lowongan tidak menerima lamaran; null bila formulir boleh tampil.
+  function tutupanEl(l) {
+    if (l.contoh) return buat('div', { class: 'info' }, 'Ini lowongan contoh untuk memperlihatkan alur seleksi. Lowongan ini tidak menerima lamaran.');
+    if (!dibuka(l)) return buat('div', { class: 'empty' }, 'Pendaftaran untuk lowongan ini sudah ditutup.');
+    return siap(l) ? null : buat('div', { class: 'empty' }, 'Pendaftaran untuk lowongan ini belum dibuka.');
+  }
+
+  const pengumumanEl = ann => (ann.length ? buat('section', { class: 'stack' }, buat('h2', null, 'Pengumuman'), ann.map(announceEl),
+    buat('p', { class: 'hint' }, 'Hanya nomor peserta yang ditampilkan. Nomor Anda ada di halaman Cek hasil.')) : null);
+
+  function ikatFormulir(l) {
+    const form = document.getElementById('apply');
+    formDibuka = Date.now();
+    if (form) form.addEventListener('submit', e => { e.preventDefault(); send(l, form); });
+    const go = document.getElementById('to-apply');
+    if (go) go.addEventListener('click', () => { form.scrollIntoView({ block: 'start' }); document.getElementById('a-nama').focus({ preventScroll: true }); });
+  }
+
   async function detail(id) {
     const tersimpan = Date.now() - dimuat < 60000 ? semua.find(x => x.id === id) : null;
     const [l, ann] = await Promise.all([tersimpan || C.getLowongan(id), C.listPengumuman(id).catch(() => [])]);
     if (!l || l.status === 'draf') { setTitle('Tidak ditemukan'); pesan(app, 'Lowongan tidak ditemukan.'); return; }
     setTitle(l.judul);
     ann.sort((a, b) => b.urutan - a.urutan);
-    const closed = l.contoh ? buat('div', { class: 'info' }, 'Ini lowongan contoh untuk memperlihatkan alur seleksi. Lowongan ini tidak menerima lamaran.')
-      : !dibuka(l) ? buat('div', { class: 'empty' }, 'Pendaftaran untuk lowongan ini sudah ditutup.')
-        : !siap(l) ? buat('div', { class: 'empty' }, 'Pendaftaran untuk lowongan ini belum dibuka.') : null;
-    const bisa = !closed;
+    const closed = tutupanEl(l);
     const bagian = (judul, isi) => (isi ? [buat('h2', null, judul), buat('p', { class: 'pre' }, isi)] : []);
     app.replaceChildren(
       buat('a', { class: 'back', href: '#/' }, 'Semua lowongan'),
       buat('section', { class: 'job-top' }, logoEl(l),
         buat('div', { class: 'job-top-in' }, buat('div', { class: 'job-head' }, badgeEl(l), buat('h1', null, l.judul)), buat('p', { class: 'note' }, meta(l))),
-        bisa ? buat('button', { type: 'button', id: 'to-apply' }, 'Lamar sekarang') : null),
+        closed ? null : buat('button', { type: 'button', id: 'to-apply' }, 'Lamar sekarang')),
       buat('div', { class: 'two' },
         buat('section', { class: 'panel' }, bagian('Tentang perusahaan', l.tentang), bagian('Deskripsi pekerjaan', l.deskripsi),
           bagian('Persyaratan', l.persyaratan), bagian('Waktu kerja, gaji, dan benefit', l.kompensasi), alurEl(l)),
-        buat('div', { class: 'stack' }, closed || formEl(l),
-          ann.length ? buat('section', { class: 'stack' }, buat('h2', null, 'Pengumuman'), ann.map(announceEl),
-            buat('p', { class: 'hint' }, 'Hanya nomor peserta yang ditampilkan. Nomor Anda ada di halaman Cek hasil.')) : null)));
-    const form = document.getElementById('apply');
-    formDibuka = Date.now();
-    if (form) form.addEventListener('submit', e => { e.preventDefault(); send(l, form); });
-    const go = document.getElementById('to-apply');
-    if (go) go.addEventListener('click', () => { form.scrollIntoView({ block: 'start' }); document.getElementById('a-nama').focus({ preventScroll: true }); });
+        buat('div', { class: 'stack' }, closed || formEl(l), pengumumanEl(ann))));
+    ikatFormulir(l);
   }
 
   function validate(v) {
@@ -211,10 +221,10 @@
 
   function cek() {
     setTitle('Cek hasil');
-    app.innerHTML = `<form id="cek" class="panel narrow" novalidate><h1>Cek hasil seleksi</h1>
+    pasang(app, html`<form id="cek" class="panel narrow" novalidate><h1>Cek hasil seleksi</h1>
       <div class="field"><label for="c-kode">Kode lamaran</label><input id="c-kode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" placeholder="ABCD-EFGH-IJKL-MNOP"></div>
       <button type="submit" class="start">Cek hasil</button>
-      <p class="hint">Kehilangan kode? Hubungi kontak HR pada lowongan yang Anda lamar.</p></form><div id="c-out" class="hasil-wrap" role="status"></div>`;
+      <p class="hint">Kehilangan kode? Hubungi kontak HR pada lowongan yang Anda lamar.</p></form><div id="c-out" class="hasil-wrap" role="status"></div>`);
     const form = document.getElementById('cek'), out = document.getElementById('c-out'), input = document.getElementById('c-kode'), btn = form.querySelector('button');
     form.addEventListener('submit', async e => {
       e.preventDefault();
@@ -279,7 +289,7 @@
 
   function privasi() {
     setTitle('Pemberitahuan privasi');
-    app.innerHTML = `<section class="panel privasi"><h1>Pemberitahuan privasi pelamar</h1>
+    pasang(app, html`<section class="panel privasi"><h1>Pemberitahuan privasi pelamar</h1>
       <p>Pemberitahuan ini menjelaskan cara data lamaran Anda diproses. Pengendali data adalah perusahaan yang tercantum pada lowongan yang Anda lamar.</p>
       <h2>Data yang dikumpulkan</h2><ul><li>Nama, email, dan nomor telepon yang Anda isi.</li><li>Teks dari CV Anda. File aslinya tidak disimpan.</li><li>Hasil tiap tahap seleksi dan catatan penilaian.</li><li>Sumber informasi lowongan dan jawaban survei, bila Anda mengisinya. Survei ditampilkan kepada tim HR tanpa nama atau nomor peserta.</li></ul>
       <h2>Tujuan dan dasar pemrosesan</h2><p>Data dipakai untuk menilai lamaran dan menghubungi Anda selama seleksi, berdasarkan persetujuan yang Anda berikan saat melamar. Bila Anda memilih talent pool, data juga dipakai untuk menawarkan lowongan lain yang sesuai.</p>
@@ -289,7 +299,7 @@
       <h2>Penyimpanan dan penerima data</h2><ul><li>Data disimpan di layanan Google Firebase, wilayah Jakarta, dan hanya bisa dibuka akun HR yang berwenang.</li><li>Google reCAPTCHA memproses data teknis perangkat untuk mencegah penyalahgunaan.</li><li>Masa simpan tercantum pada persetujuan di formulir lowongan. Setelah itu data dihapus.</li></ul>
       <h2>Pengumuman</h2><p>Portal hanya menampilkan nomor peserta. Nama, kontak, dan skor Anda tidak dipublikasikan di portal.</p>
       <h2>Hak Anda</h2><p>Anda dapat meminta akses, perbaikan, atau penghapusan data, menarik persetujuan, dan mengajukan keberatan atas penilaian otomatis, melalui kontak HR yang tercantum pada lowongan. Menarik persetujuan dapat menghentikan proses seleksi Anda.</p>
-    </section>`;
+    </section>`);
   }
 
   // Hanya alamat https yang menjadi tautan; teks lain tetap teks biasa. Hasilnya node DOM (teks dan <a>), bukan HTML.
@@ -305,37 +315,58 @@
     });
   }
 
+  // Judul dan keterangan sesuai status hasil.
+  function kepalaHasil(h, akhir, berikut) {
+    if (h.status === 'tidak') return ['Belum dapat melanjutkan', `Proses seleksi Anda berhenti pada tahap ${h.tahap ?? ''}. Terima kasih atas waktu dan minat Anda.`];
+    if (akhir) return ['Selamat, Anda lolos seluruh tahap seleksi', 'Ikuti tindak lanjut dari tim HR di bawah ini.'];
+    if (h.status === 'lolos') return [`Selamat, Anda lolos tahap ${h.tahap ?? ''}`, berikut ? `Tahap berikutnya: ${berikut}.` : ''];
+    return ['Lamaran sedang diproses', 'Lamaran Anda sudah kami terima. Hasil tiap tahap akan tampil di halaman ini.'];
+  }
+
+  // Alur lengkap bila HR menerbitkan daftar tahap; bila tidak, cukup tahap yang sudah dilalui.
+  function ringkasHasil(h) {
+    const riwayat = h.riwayat || [], lengkap = !!(h.alur || []).length;
+    const alur = lengkap ? h.alur : riwayat.map(r => r.nama), n = riwayat.length;
+    const lolosLengkap = h.status === 'lolos' && lengkap;
+    return { riwayat, lengkap, alur, n, lolos: riwayat.filter(r => r.status === 'lolos').length,
+      akhir: lolosLengkap && n === alur.length, berikut: lolosLengkap ? alur[n] : '' };
+  }
+
+  const LABEL_LANGKAH = { lolos: 'Lolos', tidak: 'Tidak lolos', kini: 'Berlangsung', nanti: '' };
+  function langkahHasil(h, x) {
+    const tampil = h.status === 'tidak' ? x.alur.slice(0, x.n) : x.alur;
+    return tampil.map((nama, i) => {
+      const s = (x.riwayat[i] || {}).status;
+      const k = s === 'lolos' || s === 'tidak' ? s : i === x.n && h.status !== 'tidak' ? 'kini' : 'nanti';
+      return buat('li', { 'data-s': k }, buat('span', { class: 'nama' }, nama), buat('span', { class: 'ket' }, LABEL_LANGKAH[k]));
+    });
+  }
+
+  function alurHasilEl(h, x) {
+    const langkah = langkahHasil(h, x);
+    if (!langkah.length) return null;
+    return buat('div', { class: 'hasil-alur' },
+      buat('div', { class: 'hasil-alur-top' }, buat('h2', null, 'Perjalanan seleksi'), x.lengkap ? buat('span', { class: 'note' }, `${x.lolos} dari ${x.alur.length} tahap`) : null),
+      buat('ol', { class: 'linimasa' }, langkah));
+  }
+
+  const catatanHasil = h => [h.perusahaan, `Nomor peserta ${h.nomor}`].filter(Boolean).join(' · ') + (h.tanggal ? ` · Diperbarui ${R.tanggalId(h.tanggal)}` : '');
+  const kakiHasil = h => `${h.kontak ? `Ada pertanyaan tentang hasil ini? Hubungi ${h.kontak}. ` : ''}Simpan kode lamaran Anda dan jangan bagikan kepada orang lain.`;
+  const jenisHasil = s => (s === 'tidak' || s === 'lolos' ? s : 'proses');
+
   // Hasil seleksi untuk pemegang kode: data dokumen hasil (dari HR) dipasang sebagai teks, bukan markup.
   function hasilEl(h) {
-    const riwayat = h.riwayat || [], alur = (h.alur || []).length ? h.alur : riwayat.map(r => r.nama);
-    const lengkap = !!(h.alur || []).length, n = riwayat.length;
-    const lolos = riwayat.filter(r => r.status === 'lolos').length;
-    const akhir = h.status === 'lolos' && lengkap && n === alur.length, berikut = h.status === 'lolos' && lengkap ? alur[n] : '';
-    const kepala = h.status === 'tidak'
-      ? ['Belum dapat melanjutkan', `Proses seleksi Anda berhenti pada tahap ${h.tahap ?? ''}. Terima kasih atas waktu dan minat Anda.`]
-      : akhir ? ['Selamat, Anda lolos seluruh tahap seleksi', 'Ikuti tindak lanjut dari tim HR di bawah ini.']
-        : h.status === 'lolos' ? [`Selamat, Anda lolos tahap ${h.tahap ?? ''}`, berikut ? `Tahap berikutnya: ${berikut}.` : '']
-          : ['Lamaran sedang diproses', 'Lamaran Anda sudah kami terima. Hasil tiap tahap akan tampil di halaman ini.'];
-    const jenis = h.status === 'tidak' ? 'tidak' : h.status === 'lolos' ? 'lolos' : 'proses';
-    const tampil = h.status === 'tidak' ? alur.slice(0, n) : alur;
-    const label = { lolos: 'Lolos', tidak: 'Tidak lolos', kini: 'Berlangsung', nanti: '' };
-    const langkah = tampil.map((nama, i) => {
-      const s = (riwayat[i] || {}).status;
-      const k = s === 'lolos' || s === 'tidak' ? s : i === n && h.status !== 'tidak' ? 'kini' : 'nanti';
-      return buat('li', { 'data-s': k }, buat('span', { class: 'nama' }, nama), buat('span', { class: 'ket' }, label[k]));
-    });
-    const catatan = [h.perusahaan, `Nomor peserta ${h.nomor}`].filter(Boolean).join(' · ') + (h.tanggal ? ` · Diperbarui ${R.tanggalId(h.tanggal)}` : '');
+    const x = ringkasHasil(h), kepala = kepalaHasil(h, x.akhir, x.berikut);
+    const survei = h.lowonganId && h.status !== 'proses' && !sudahSurvei(h.lowonganId);
     return buat('section', { class: 'hasil', tabindex: '-1' },
-      buat('header', { class: 'hasil-top' }, buat('p', { class: 'eyebrow' }, 'Hasil seleksi'), buat('h1', null, h.posisi), buat('p', { class: 'note' }, catatan)),
-      buat('div', { class: 'hasil-status', 'data-s': jenis }, buat('span', { class: 'ikon', 'aria-hidden': 'true' }),
+      buat('header', { class: 'hasil-top' }, buat('p', { class: 'eyebrow' }, 'Hasil seleksi'), buat('h1', null, h.posisi), buat('p', { class: 'note' }, catatanHasil(h))),
+      buat('div', { class: 'hasil-status', 'data-s': jenisHasil(h.status) }, buat('span', { class: 'ikon', 'aria-hidden': 'true' }),
         buat('div', null, buat('h2', null, kepala[0]), kepala[1] ? buat('p', null, kepala[1]) : null)),
       h.pesan ? buat('div', { class: 'hasil-tindak' }, buat('h2', null, 'Tindak lanjut'), buat('p', { class: 'pre' }, tautan(h.pesan))) : null,
-      langkah.length ? buat('div', { class: 'hasil-alur' },
-        buat('div', { class: 'hasil-alur-top' }, buat('h2', null, 'Perjalanan seleksi'), lengkap ? buat('span', { class: 'note' }, `${lolos} dari ${alur.length} tahap`) : null),
-        buat('ol', { class: 'linimasa' }, langkah)) : null,
-      h.lowonganId && h.status !== 'proses' && !sudahSurvei(h.lowonganId) ? surveiEl() : null,
+      alurHasilEl(h, x),
+      survei ? surveiEl() : null,
       buat('div', { class: 'hasil-kaki' }, buat('button', { type: 'button', class: 'ghost', id: 'c-lagi' }, 'Cek kode lain'),
-        buat('p', { class: 'hint' }, `${h.kontak ? `Ada pertanyaan tentang hasil ini? Hubungi ${h.kontak}. ` : ''}Simpan kode lamaran Anda dan jangan bagikan kepada orang lain.`)));
+        buat('p', { class: 'hint' }, kakiHasil(h))));
   }
 
   async function route() {

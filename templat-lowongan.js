@@ -147,18 +147,25 @@
   const dan = a => (a.length < 3 ? a.join(' dan ') : `${a.slice(0, -1).join(', ')}, dan ${a[a.length - 1]}`);
   const atau = a => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} atau ${a[a.length - 1]}`);
 
-  function keTeks(d, labelJenjang) {
-    const tugas = aktif(d.tugas), jur = aktif(d.jurusan), ket = aktif(d.ketentuan);
+  // Persyaratan disusun berurutan: pendidikan, pengalaman, keahlian wajib, sertifikat wajib, lalu yang diutamakan.
+  function syaratLowongan(d, labelJenjang) {
+    const jur = aktif(d.jurusan);
     const wajib = d.keahlian.filter(x => x.aktif && x.wajib).map(x => x.t), opsi = d.keahlian.filter(x => x.aktif && !x.wajib).map(x => x.t).concat(aktif(d.tambahan));
     const sW = d.sertifikat.filter(x => x.aktif && x.wajib).map(x => x.t), sO = d.sertifikat.filter(x => x.aktif && !x.wajib).map(x => x.t);
     const syarat = [];
-    if (labelJenjang) { const lv = labelJenjang(d.pendidikan); if (lv) syarat.push(`Minimal ${lv}${jur.length ? ` jurusan ${atau(jur)}` : ''}`); }
+    const lv = labelJenjang ? labelJenjang(d.pendidikan) : '';
+    if (lv) syarat.push(`Minimal ${lv}${jur.length ? ` jurusan ${atau(jur)}` : ''}`);
     if (+d.tahun > 0) syarat.push(`Pengalaman minimal ${d.tahun} tahun di bidang terkait`);
     if (wajib.length) syarat.push(`Keahlian: ${dan(wajib)}`);
     if (sW.length) syarat.push(`Memiliki ${dan(sW)}`);
     if (opsi.length || sO.length) syarat.push(`Diutamakan memiliki ${dan(opsi.concat(sO))}`);
+    return syarat;
+  }
+
+  function keTeks(d, labelJenjang) {
+    const tugas = aktif(d.tugas), ket = aktif(d.ketentuan);
     const deskripsi = [tugas.length ? `Tanggung jawab utama:\n${tugas.map(x => `- ${x}`).join('\n')}` : '', ket.length ? `Ketentuan seleksi:\n${ket.map(x => `- ${x}`).join('\n')}` : ''].filter(Boolean).join('\n\n');
-    return { deskripsi, persyaratan: syarat.join('\n') };
+    return { deskripsi, persyaratan: syaratLowongan(d, labelJenjang).join('\n') };
   }
 
   function keKriteria(d, c) {
